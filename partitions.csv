@@ -1,0 +1,9 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# Lưu trữ cấu hình WiFi, Bluetooth, v.v.
+nvs,      data, nvs,     0x9000,  0x5000,
+otadata,  data, ota,     0xe000,  0x2000,
+# Phân vùng chứa Code (Cho phép code nặng tới 4MB)
+app0,     app,  ota_0,   0x10000, 4M,
+app1,     app,  ota_1,   ,        4M,
+# Phân vùng lưu trữ Data (Chứa ảnh, font chữ, file hệ thống - 7MB)
+spiffs,   data, spiffs,  ,        7M,
