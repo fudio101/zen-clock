@@ -1,7 +1,6 @@
 #include "display/lcd_driver.h"
 #include "board_config.h"
 #include "driver/gpio.h"
-#include "driver/ledc.h"
 #include "esp_lcd_io_i80.h"
 #include "esp_lcd_panel_vendor.h"
 #include "esp_lcd_panel_ops.h"
@@ -9,11 +8,15 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "lcd_backlight.h"
 
 static const char *TAG = "lcd_driver";
 
 /// Static IO handle for access via getter
 static esp_lcd_panel_io_handle_t s_io_handle = NULL;
+
+/// Static Backlight handle
+static lcd_backlight_handle_t s_bl_handle = NULL;
 
 // -------------------------------------------------------
 // LCD_MODULE_CMD_1: Init sequence for newer T-Display-S3
@@ -47,37 +50,13 @@ static const lcd_cmd_t lcd_st7789v[] = {
      14}, // Negative gamma
 };
 
-// -------------------------------------------------------
-// Backlight PWM setup (LEDC)
-// -------------------------------------------------------
-static void backlight_pwm_init(void)
+void lcd_driver_set_backlight(uint8_t percent, uint32_t fade_ms)
 {
-  ledc_timer_config_t timer_conf = {
-      .speed_mode = LEDC_LOW_SPEED_MODE,
-      .duty_resolution = LCD_BL_PWM_RESOLUTION,
-      .timer_num = LCD_BL_PWM_TIMER,
-      .freq_hz = LCD_BL_PWM_FREQ_HZ,
-      .clk_cfg = LEDC_AUTO_CLK,
-  };
-  ESP_ERROR_CHECK(ledc_timer_config(&timer_conf));
-
-  ledc_channel_config_t channel_conf = {
-      .speed_mode = LEDC_LOW_SPEED_MODE,
-      .channel = LCD_BL_PWM_CHANNEL,
-      .timer_sel = LCD_BL_PWM_TIMER,
-      .intr_type = LEDC_INTR_DISABLE,
-      .gpio_num = LCD_BL,
-      .duty = 0, // Start off, will be set after init
-      .hpoint = 0,
-  };
-  ESP_ERROR_CHECK(ledc_channel_config(&channel_conf));
-}
-
-void lcd_set_backlight(uint8_t brightness)
-{
-  ledc_set_duty(LEDC_LOW_SPEED_MODE, LCD_BL_PWM_CHANNEL, brightness);
-  ledc_update_duty(LEDC_LOW_SPEED_MODE, LCD_BL_PWM_CHANNEL);
-  ESP_LOGI(TAG, "Backlight set to %d/255", brightness);
+  if (s_bl_handle)
+  {
+    lcd_backlight_set_brightness(s_bl_handle, percent, fade_ms);
+    ESP_LOGI(TAG, "Backlight set to %d%%", percent);
+  }
 }
 
 // -------------------------------------------------------
@@ -91,8 +70,14 @@ esp_lcd_panel_handle_t lcd_driver_init(void)
   gpio_set_direction(LCD_POWER, GPIO_MODE_OUTPUT);
   gpio_set_level(LCD_POWER, 1);
 
-  // 2. Setup backlight via PWM
-  backlight_pwm_init();
+  // 2. Setup backlight via lcd_backlight component
+  const lcd_backlight_config_t bl_config = {
+      .gpio_num = LCD_BL,
+      .pwm_freq_hz = LCD_BL_PWM_FREQ_HZ,
+      .timer_num = LEDC_TIMER_0,
+      .channel_num = LEDC_CHANNEL_0
+  };
+  ESP_ERROR_CHECK(lcd_backlight_init(&bl_config, &s_bl_handle));
 
   // 3. Critical workaround: Pull RD pin HIGH
   //    Without this, I80 bus transfer is corrupted on ESP-IDF v5.0+
@@ -170,8 +155,7 @@ esp_lcd_panel_handle_t lcd_driver_init(void)
   // Turn on the display
   ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
-  // Set default backlight brightness
-  lcd_set_backlight(LCD_BL_DEFAULT_BRIGHTNESS);
+
 
   ESP_LOGI(TAG, "LCD initialized: %dx%d, ST7789 via I80, backlight PWM enabled", LCD_H_RES,
            LCD_V_RES);

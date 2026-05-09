@@ -26,10 +26,11 @@ esp_lcd_panel_handle_t lcd_driver_init(void);
 esp_lcd_panel_io_handle_t lcd_driver_get_io_handle(void);
 
 /**
- * @brief Set backlight brightness via PWM.
+ * @brief Set backlight brightness via PWM (percentage)
  *
- * @param brightness  Brightness level (0 = off, 255 = max).
+ * @param percent Brightness level (0 = off, 100 = max).
+ * @param fade_ms Fade duration in milliseconds.
  */
-void lcd_set_backlight(uint8_t brightness);
+void lcd_driver_set_backlight(uint8_t percent, uint32_t fade_ms);
 
 #endif // LCD_DRIVER_H
