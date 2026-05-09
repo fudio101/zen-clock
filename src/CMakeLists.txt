@@ -1,13 +1,7 @@
-# ZemClock main component
+# ZenClock main component
 
 idf_component_register(
-    SRCS
-        "main.c"
-        "display/lcd_driver.c"
-        "display/lcd_graphics.c"
-        "display/lcd_text.c"
-        "fonts/font_8x8.c"
-        "ui/ui_manager.c"
+    SRCS "main.c"
     INCLUDE_DIRS "../include"
-    REQUIRES driver esp_lcd
+    REQUIRES tdisplays3 lvgl esp_lvgl_port ui
 )

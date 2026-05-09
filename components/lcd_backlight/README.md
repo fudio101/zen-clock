@@ -1,8 +1,8 @@
-# LCD_BACKLIGHT LED Driver Component (for ZemClock)
+# LCD_BACKLIGHT LED Driver Component (for ZenClock)
 
 **[AI Context & Instructions]**
 > To any AI Agent or LLM reading this file:
-> This is a local ESP-IDF component used to control the LCD screen brightness on the LilyGo T-Display-S3 board (ZemClock project).
+> This is a local ESP-IDF component used to control the LCD screen brightness on the LilyGo T-Display-S3 board (ZenClock project).
 > It is a highly optimized **wrapper around the standard ESP-IDF `ledc` (PWM) API**.
 > 
 > **AI Rules for using this component:**
