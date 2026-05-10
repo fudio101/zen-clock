@@ -1,9 +1,7 @@
-file(GLOB_RECURSE UI_SRCS
-    "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
-)
+# ZenClock UI component — hand-written LVGL interface
 
 idf_component_register(
-    SRCS ${UI_SRCS}
-    INCLUDE_DIRS "." "components"
+    SRCS "ui.c"
+    INCLUDE_DIRS "."
     REQUIRES lvgl
 )

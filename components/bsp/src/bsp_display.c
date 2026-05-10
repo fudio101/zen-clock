@@ -27,10 +27,10 @@ static const char *TAG = "bsp_display";
 // ============================================================
 // LVGL Port Constants
 // ============================================================
-#define LVGL_BUF_SIZE (((LCD_H_RES * LCD_V_RES) / 10) + LCD_H_RES)
+#define LVGL_BUF_SIZE (LCD_H_RES * LCD_V_RES)
 #define LVGL_TICK_PERIOD_MS 5
 #define LVGL_MAX_SLEEP_MS 10
-#define LVGL_TASK_STACK_SIZE (4 * 1024)
+#define LVGL_TASK_STACK_SIZE (6 * 1024)
 #define LVGL_TASK_PRIORITY 2
 
 // ============================================================
@@ -49,7 +49,7 @@ static void init_i80_bus(esp_lcd_panel_io_handle_t *io_handle)
           PIN_LCD_D0, PIN_LCD_D1, PIN_LCD_D2, PIN_LCD_D3,
           PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7},
       .bus_width = I80_BUS_WIDTH,
-      .max_transfer_bytes = LCD_H_RES * 100 * sizeof(uint16_t),
+      .max_transfer_bytes = LCD_H_RES * LCD_V_RES * sizeof(uint16_t),
   };
   ESP_ERROR_CHECK(esp_lcd_new_i80_bus(&bus_config, &i80_bus));
 

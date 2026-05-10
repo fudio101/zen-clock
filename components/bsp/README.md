@@ -108,9 +108,10 @@ esp_lcd_panel_set_gap(panel_handle, 0, 35);
 |---|---|---|
 | Pixel clock | 17 MHz | `bsp_display.c` |
 | I80 bus width | 8 bits | `bsp_display.c` |
-| LVGL buffer size | `(320×170/10) + 320` pixels | `bsp_display.c` |
-| LVGL double buffer | Yes (PSRAM) | `bsp_display.c` |
-| LVGL task stack | 4 KB, priority 2, core 1 | `bsp_display.c` |
+| LVGL buffer size | `320×170` pixels (full screen) | `bsp_display.c` |
+| LVGL double buffer | Yes (PSRAM, ~213 KB total) | `bsp_display.c` |
+| LVGL task stack | 6 KB, priority 2, core 1 | `bsp_display.c` |
+| I80 max transfer | Full screen (`320×170×2` bytes) | `bsp_display.c` |
 | Button debounce | 50 ms | `bsp_buttons.c` |
 | Button task | 2 KB stack, priority 3, core 0 | `bsp_buttons.c` |
 | ADC | ADC1_CH3, 12dB attenuation, curve-fitting calibration | `bsp_battery.c` |
@@ -135,7 +136,7 @@ void app_main(void) {
     bsp_display_init(&disp, false);      // all hardware up, backlight off
 
     lvgl_port_lock(0);                   // MUST lock before LVGL calls
-    ui_init();                           // SquareLine auto-generated UI
+    ui_init();                           // hand-written LVGL UI
     lvgl_port_unlock();
 
     bsp_display_set_brightness(100, 2000); // smooth 2s fade-in
