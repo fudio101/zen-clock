@@ -4,49 +4,44 @@
 // ============================================================
 // Board: LilyGo T-Display-S3
 // MCU:   ESP32-S3R8 (Dual-core Xtensa LX7, 240MHz)
+// Display: 1.9" ST7789 320×170, I80 8-bit parallel
 // ============================================================
 
 #define BOARD_LILYGO_T_DISPLAY_S3
 
-// ============================================================
-// ST7789 LCD — Intel 8080 (I80) 8-bit Parallel Interface
-// ============================================================
+// --- LCD Data Bus (8-bit I80) ---
+#define PIN_LCD_D0    39
+#define PIN_LCD_D1    40
+#define PIN_LCD_D2    41
+#define PIN_LCD_D3    42
+#define PIN_LCD_D4    45
+#define PIN_LCD_D5    46
+#define PIN_LCD_D6    47
+#define PIN_LCD_D7    48
 
-// 8-bit parallel data bus
-#define LCD_D0 39
-#define LCD_D1 40
-#define LCD_D2 41
-#define LCD_D3 42
-#define LCD_D4 45
-#define LCD_D5 46
-#define LCD_D6 47
-#define LCD_D7 48
+// --- LCD Control ---
+#define PIN_LCD_WR    8   // Write clock (PCLK)
+#define PIN_LCD_RD    9   // Read (input, pull-up)
+#define PIN_LCD_CS    6
+#define PIN_LCD_DC    7
+#define PIN_LCD_RST   5
+#define PIN_LCD_BL    38  // Backlight (PWM capable)
+#define PIN_LCD_PWR   15  // LDO enable (HIGH = on)
 
-// Control pins
-#define LCD_WR 8
-#define LCD_RD 9
-#define LCD_CS 6
-#define LCD_DC 7
-#define LCD_RST 5
-#define LCD_BL 38    // Backlight (PWM capable)
-#define LCD_POWER 15 // LDO Enable — must be HIGH to power LCD
+// --- Display Parameters ---
+#define LCD_H_RES     320 // Landscape width (after swap_xy)
+#define LCD_V_RES     170 // Landscape height
 
-// Display resolution (landscape after swap_xy)
-#define LCD_H_RES 320
-#define LCD_V_RES 170
+// --- Battery ---
+#define PIN_BAT_ADC   4   // GPIO4, ADC1_CH3, ×2 resistor divider
 
-// ============================================================
-// Battery Monitoring
-// ============================================================
-#define BATTERY_ADC_PIN 4 // GPIO4 via resistor divider
+// --- User Buttons ---
+#define PIN_BTN_BOOT  0   // BOOT button (active LOW)
+#define PIN_BTN_IO14  14  // Side button (active LOW)
 
-// ============================================================
-// Backlight PWM Configuration
-// ============================================================
-#define LCD_BL_PWM_FREQ_HZ 5000       // 5 kHz PWM frequency
-#define LCD_BL_PWM_RESOLUTION 8       // 8-bit resolution (0-255)
-#define LCD_BL_PWM_CHANNEL 0          // LEDC channel 0
-#define LCD_BL_PWM_TIMER 0            // LEDC timer 0
-#define LCD_BL_DEFAULT_BRIGHTNESS 200 // Default brightness (0-255)
+// --- Backlight Defaults ---
+#define LCD_BL_PWM_FREQ_HZ   5000
+#define LCD_BL_LEDC_TIMER     1  // LEDC_TIMER_1
+#define LCD_BL_LEDC_CHANNEL   0  // LEDC_CHANNEL_0
 
 #endif // BOARD_CONFIG_H

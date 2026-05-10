@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: MIT
+// ZenClock BSP — Board Support Package for LilyGo T-Display-S3
+
+#pragma once
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#include "esp_lvgl_port.h"
+
+  // ============================================================
+  // Display Init & Control
+  // ============================================================
+
+  /**
+   * @brief Initialize LCD hardware and LVGL display port.
+   *
+   * Initializes I80 bus, ST7789 panel, battery ADC, backlight,
+   * and registers the display with LVGL via esp_lvgl_port.
+   *
+   * @param disp_handle  Output: LVGL display handle
+   * @param backlight_on If true, turn on backlight immediately at 100%
+   */
+  void bsp_display_init(lv_disp_t **disp_handle, bool backlight_on);
+
+  /**
+   * @brief Set LCD brightness as percentage with optional fade.
+   *
+   * @param percent      Brightness 0-100%
+   * @param fade_time_ms Fade duration in ms (0 = instant)
+   */
+  void bsp_display_set_brightness(uint8_t percent, uint32_t fade_time_ms);
+
+  /**
+   * @brief Get current brightness percentage.
+   */
+  uint8_t bsp_display_get_brightness(void);
+
+  // ============================================================
+  // Battery Monitoring
+  // ============================================================
+
+  /**
+   * @brief Get battery voltage in millivolts (×2 corrected for divider).
+   */
+  int bsp_battery_get_voltage(void);
+
+  /**
+   * @brief Get battery percentage (0-100).
+   */
+  int bsp_battery_get_percentage(void);
+
+  /**
+   * @brief Check if USB power is connected based on voltage reading.
+   */
+  bool bsp_battery_usb_connected(void);
+
+  // ============================================================
+  // Button Input
+  // ============================================================
+
+#define BSP_BTN_BOOT  0 // BOOT button (GPIO0)
+#define BSP_BTN_IO14  1 // Side button (GPIO14)
+#define BSP_BTN_COUNT 2
+
+  /**
+   * @brief Button event callback type.
+   *
+   * @param btn_id  BSP_BTN_BOOT or BSP_BTN_IO14
+   * @param pressed true = pressed, false = released
+   */
+  typedef void (*bsp_button_cb_t)(int btn_id, bool pressed);
+
+  /**
+   * @brief Initialize buttons and start monitoring task.
+   *
+   * @param callback Function called on button press/release events
+   */
+  void bsp_buttons_init(bsp_button_cb_t callback);
+
+#ifdef __cplusplus
+} /*extern "C"*/
+#endif

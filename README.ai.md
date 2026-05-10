@@ -15,27 +15,41 @@
 
 ### `src/main.c`
 - Application entry point (`app_main`).
-- Calls `lcd_init()` → `ui_init()` → `lcd_set_brightness()`.
+- Calls `bsp_display_init()` → `ui_init()` → `bsp_display_set_brightness()` → `bsp_buttons_init()`.
 - All LVGL calls wrapped in `lvgl_port_lock(0)` / `lvgl_port_unlock()`.
+- `app_main` returns after setup — FreeRTOS scheduler runs LVGL + button tasks.
 
-### `components/tdisplays3/`
-- **HAL layer** — hardware abstraction for the T-Display-S3 board.
-- Initializes I80 bus, ST7789 panel, LVGL port, backlight, and battery ADC.
-- Key APIs:
-  ```c
-  void lcd_init(lv_disp_t **disp, bool backlight_on);
-  void lcd_set_brightness(uint8_t percent, uint32_t fade_ms);
-  uint8_t lcd_get_brightness(void);
-  int get_battery_voltage(void);       // millivolts (×2 corrected)
-  int get_battery_percentage(void);    // 0-100
-  bool usb_power_connected(void);
-  ```
-- 📖 **[Read header: `t_display_s3.h`](components/tdisplays3/t_display_s3.h)** for full API.
+### `components/bsp/` — Board Support Package
+Modular HAL for the T-Display-S3, split into 4 sub-modules:
+
+| File | Responsibility |
+|---|---|
+| `src/bsp_display.c` | I80 bus, ST7789 panel, LVGL port, power GPIO, init orchestrator |
+| `src/bsp_battery.c` | ADC init, voltage/percentage (float FPU), USB detection |
+| `src/bsp_backlight.c` | Thin facade over `lcd_backlight` component |
+| `src/bsp_buttons.c` | GPIO ISR + debounce task, callback API |
+
+Key APIs:
+```c
+void bsp_display_init(lv_disp_t **disp, bool backlight_on);
+void bsp_display_set_brightness(uint8_t percent, uint32_t fade_ms);
+uint8_t bsp_display_get_brightness(void);
+int bsp_battery_get_voltage(void);       // millivolts (×2 corrected)
+int bsp_battery_get_percentage(void);    // 0-100
+bool bsp_battery_usb_connected(void);
+void bsp_buttons_init(bsp_button_cb_t callback);
+```
+📖 **[Read header: `bsp.h`](components/bsp/include/bsp.h)** for full API.
+
+### `include/board_config.h` — Hardware Pin Definitions
+**Single source of truth** for all pin assignments and board constants.
+All components reference this file — never hardcode pins elsewhere.
+📖 **[Read: `board_config.h`](include/board_config.h)**
 
 ### `components/lcd_backlight/`
 - High-performance PWM (LEDC) wrapper for screen brightness.
 - Uses 10-bit resolution for premium fading effects (0-100%).
-- **Do NOT call directly** — use `lcd_set_brightness()` from tdisplays3.
+- **Do NOT call directly** — use `bsp_display_set_brightness()` from BSP.
 - 📖 **[Read docs: `README.md`](components/lcd_backlight/README.md)**
 
 ### `components/ui/` ⚠️ AUTO-GENERATED
@@ -53,12 +67,12 @@
 Rotation MUST be configured in **two places** with matching values:
 
 ```c
-// Panel hardware (init_lcd_panel):
+// Panel hardware (bsp_display.c → init_panel):
 esp_lcd_panel_swap_xy(panel_handle, true);
 esp_lcd_panel_mirror(panel_handle, false, true);
 esp_lcd_panel_set_gap(panel_handle, 0, 35);
 
-// LVGL port (lvgl_port_display_cfg_t):
+// LVGL port (bsp_display.c → register_lvgl_display):
 .rotation = { .swap_xy = true, .mirror_x = false, .mirror_y = true }
 ```
 
@@ -68,11 +82,13 @@ esp_lcd_panel_set_gap(panel_handle, 0, 35);
 
 ```c
 static lv_display_t *disp_handle;
-lcd_init(&disp_handle, false);   // backlight off initially
-lvgl_port_lock(0);               // MUST lock before any LVGL call
-ui_init();                       // SquareLine-generated init
+bsp_display_init(&disp_handle, false);   // backlight off initially
+lvgl_port_lock(0);                       // MUST lock before any LVGL call
+ui_init();                               // SquareLine-generated init
 lvgl_port_unlock();
-lcd_set_brightness(100, 2000);   // smooth fade-in
+bsp_display_set_brightness(100, 2000);   // smooth fade-in
+bsp_buttons_init(on_button_press);       // button callback
+// app_main returns — FreeRTOS scheduler continues
 ```
 
 ## 5. Build & Flash Workflow
@@ -92,13 +108,14 @@ pio run -t upload        # Build & flash
 
 ## 6. Strict AI Development Rules
 
-1. **No raw hardware** in `main.c` or UI code — use `tdisplays3` API only.
-2. **No direct `lcd_backlight` access** — go through `tdisplays3` wrapper.
+1. **No raw hardware** in `main.c` or UI code — use `bsp` API only.
+2. **No direct `lcd_backlight` access** — go through `bsp_display_set_brightness()`.
 3. **No `sdkconfig.defaults`** — use `menuconfig`; provide menu paths for config changes.
 4. **Never Quad PSRAM** — causes boot loop on this board.
 5. **UI is auto-gen** — never edit `components/ui/`; always run `patch_ui.bat` after export.
 6. **LVGL calls** must be wrapped in `lvgl_port_lock(0)` / `lvgl_port_unlock()`.
-7. Prefer `.h` files and `README.md` for API understanding before reading `.c` files.
+7. **Pin definitions** live in `include/board_config.h` only — never duplicate.
+8. Prefer `.h` files and `README.md` for API understanding before reading `.c` files.
 
 ## 7. Pin Reference
 
