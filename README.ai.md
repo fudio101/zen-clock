@@ -20,26 +20,9 @@
 - `app_main` returns after setup — FreeRTOS scheduler runs LVGL + button tasks.
 
 ### `components/bsp/` — Board Support Package
-Modular HAL for the T-Display-S3, split into 4 sub-modules:
-
-| File | Responsibility |
-|---|---|
-| `src/bsp_display.c` | I80 bus, ST7789 panel, LVGL port, power GPIO, init orchestrator |
-| `src/bsp_battery.c` | ADC init, voltage/percentage (float FPU), USB detection |
-| `src/bsp_backlight.c` | Thin facade over `lcd_backlight` component |
-| `src/bsp_buttons.c` | GPIO ISR + debounce task, callback API |
-
-Key APIs:
-```c
-void bsp_display_init(lv_disp_t **disp, bool backlight_on);
-void bsp_display_set_brightness(uint8_t percent, uint32_t fade_ms);
-uint8_t bsp_display_get_brightness(void);
-int bsp_battery_get_voltage(void);       // millivolts (×2 corrected)
-int bsp_battery_get_percentage(void);    // 0-100
-bool bsp_battery_usb_connected(void);
-void bsp_buttons_init(bsp_button_cb_t callback);
-```
-📖 **[Read header: `bsp.h`](components/bsp/include/bsp.h)** for full API.
+Modular HAL for the T-Display-S3 (display, backlight, battery, buttons).
+📖 **[Full docs: `bsp/README.md`](components/bsp/README.md)** — architecture, API reference, init sequence, constants.
+📖 **[Public API: `bsp.h`](components/bsp/include/bsp.h)**
 
 ### `include/board_config.h` — Hardware Pin Definitions
 **Single source of truth** for all pin assignments and board constants.

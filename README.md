@@ -31,6 +31,7 @@ A beautiful clock project running on the **LilyGo T-Display-S3** board.
 ZenClock/
 ├── components/
 │   ├── bsp/                   # Board Support Package (modular HAL)
+│   │   ├── README.md          # 📖 Detailed architecture & API docs
 │   │   ├── include/bsp.h      # Public API
 │   │   ├── priv_include/      # Internal cross-module declarations
 │   │   └── src/
