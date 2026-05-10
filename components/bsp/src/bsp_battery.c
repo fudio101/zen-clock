@@ -15,7 +15,7 @@
 static const char *TAG = "bsp_battery";
 
 // Battery ADC channel (GPIO4 = ADC1_CH3)
-#define BAT_ADC_UNIT    ADC_UNIT_1
+#define BAT_ADC_UNIT ADC_UNIT_1
 #define BAT_ADC_CHANNEL ADC_CHANNEL_3
 
 // USB detection: voltage >= 4500mV (after ×2 correction) indicates USB power

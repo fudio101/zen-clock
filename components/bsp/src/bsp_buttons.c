@@ -12,8 +12,8 @@
 
 static const char *TAG = "bsp_buttons";
 
-#define BTN_DEBOUNCE_MS   50
-#define BTN_TASK_STACK    2048
+#define BTN_DEBOUNCE_MS 50
+#define BTN_TASK_STACK 2048
 #define BTN_TASK_PRIORITY 3
 
 static const int s_btn_pins[BSP_BTN_COUNT] = {PIN_BTN_BOOT, PIN_BTN_IO14};

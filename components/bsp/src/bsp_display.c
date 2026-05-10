@@ -14,24 +14,24 @@ static const char *TAG = "bsp_display";
 // ============================================================
 // I80 Bus & Panel Constants (private to this file)
 // ============================================================
-#define PIXEL_CLOCK_HZ        (17 * 1000 * 1000)
-#define I80_BUS_WIDTH         8
+#define PIXEL_CLOCK_HZ (17 * 1000 * 1000)
+#define I80_BUS_WIDTH 8
 #define I80_TRANS_QUEUE_DEPTH 20
-#define I80_DC_CMD_LEVEL      0
-#define I80_DC_DUMMY_LEVEL    0
-#define I80_DC_DATA_LEVEL     1
-#define CMD_BITS              8
-#define PARAM_BITS            8
-#define PWR_ON_LEVEL          1
+#define I80_DC_CMD_LEVEL 0
+#define I80_DC_DUMMY_LEVEL 0
+#define I80_DC_DATA_LEVEL 1
+#define CMD_BITS 8
+#define PARAM_BITS 8
+#define PWR_ON_LEVEL 1
 
 // ============================================================
 // LVGL Port Constants
 // ============================================================
-#define LVGL_BUF_SIZE         (((LCD_H_RES * LCD_V_RES) / 10) + LCD_H_RES)
-#define LVGL_TICK_PERIOD_MS   5
-#define LVGL_MAX_SLEEP_MS     10
-#define LVGL_TASK_STACK_SIZE  (4 * 1024)
-#define LVGL_TASK_PRIORITY    2
+#define LVGL_BUF_SIZE (((LCD_H_RES * LCD_V_RES) / 10) + LCD_H_RES)
+#define LVGL_TICK_PERIOD_MS 5
+#define LVGL_MAX_SLEEP_MS 10
+#define LVGL_TASK_STACK_SIZE (4 * 1024)
+#define LVGL_TASK_PRIORITY 2
 
 // ============================================================
 // I80 Bus Init
