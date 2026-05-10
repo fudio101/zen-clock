@@ -1,7 +1,7 @@
-# ZenClock UI component — hand-written LVGL interface
+# ZenClock UI component — modular LVGL interface
 
 idf_component_register(
-    SRCS "ui.c"
+    SRCS "ui.c" "clock_face_text.c" "status_bar.c"
     INCLUDE_DIRS "."
-    REQUIRES lvgl
+    REQUIRES lvgl bsp
 )
