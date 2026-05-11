@@ -53,13 +53,11 @@ esp_err_t wifi_cred_store_provision(void)
 
   if (ret == ESP_OK && stored_hash == WIFI_CRED_HASH && WIFI_CRED_COUNT > 0)
   {
-    ESP_LOGI(TAG, "Credentials unchanged (hash=0x%08" PRIx32 "), skipping provision",
-             (uint32_t)WIFI_CRED_HASH);
+    ESP_LOGI(TAG, "Credentials unchanged (hash=0x%08" PRIx32 "), skipping provision", (uint32_t)WIFI_CRED_HASH);
     return ESP_OK;
   }
 
-  ESP_LOGI(TAG, "Provisioning %d credentials (hash=0x%08" PRIx32 ")",
-           WIFI_CRED_COUNT, (uint32_t)WIFI_CRED_HASH);
+  ESP_LOGI(TAG, "Provisioning %d credentials (hash=0x%08" PRIx32 ")", WIFI_CRED_COUNT, (uint32_t)WIFI_CRED_HASH);
 
   // Clear old entries
   uint8_t old_count = 0;

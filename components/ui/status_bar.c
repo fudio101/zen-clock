@@ -160,22 +160,19 @@ void status_bar_set_wifi_status(wifi_status_t status)
   case WIFI_STATUS_CONNECTING:
     lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_wifi_icon,
-                                lv_palette_main(LV_PALETTE_ORANGE), 0);
+    lv_obj_set_style_text_color(s_wifi_icon, lv_palette_main(LV_PALETTE_ORANGE), 0);
     break;
 
   case WIFI_STATUS_VERIFYING:
     lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_wifi_icon,
-                                lv_palette_main(LV_PALETTE_LIGHT_BLUE), 0);
+    lv_obj_set_style_text_color(s_wifi_icon, lv_palette_main(LV_PALETTE_LIGHT_BLUE), 0);
     break;
 
   case WIFI_STATUS_CONNECTED:
     lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_wifi_icon,
-                                lv_palette_main(LV_PALETTE_GREEN), 0);
+    lv_obj_set_style_text_color(s_wifi_icon, lv_palette_main(LV_PALETTE_GREEN), 0);
     break;
   }
 
@@ -201,22 +198,19 @@ void status_bar_set_sntp_status(sntp_status_t status)
   case SNTP_STATUS_SYNCING:
     lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_sntp_icon,
-                                lv_palette_main(LV_PALETTE_ORANGE), 0);
+    lv_obj_set_style_text_color(s_sntp_icon, lv_palette_main(LV_PALETTE_ORANGE), 0);
     break;
 
   case SNTP_STATUS_SYNCED:
     lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_sntp_icon,
-                                lv_palette_main(LV_PALETTE_GREEN), 0);
+    lv_obj_set_style_text_color(s_sntp_icon, lv_palette_main(LV_PALETTE_GREEN), 0);
     break;
 
   case SNTP_STATUS_FAILED:
     lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_sntp_icon,
-                                lv_palette_main(LV_PALETTE_RED), 0);
+    lv_obj_set_style_text_color(s_sntp_icon, lv_palette_main(LV_PALETTE_RED), 0);
     break;
   }
 

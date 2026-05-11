@@ -59,8 +59,7 @@ static int s_candidate_count = 0;
 
 static const char *state_name(wifi_state_t st)
 {
-  static const char *names[] = {
-      "IDLE", "SCANNING", "CONNECTING", "VERIFYING", "CONNECTED", "RECONNECTING"};
+  static const char *names[] = {"IDLE", "SCANNING", "CONNECTING", "VERIFYING", "CONNECTED", "RECONNECTING"};
   return (st <= WIFI_ST_RECONNECTING) ? names[st] : "?";
 }
 
@@ -116,8 +115,7 @@ static bool check_stop_signal(void)
   EventBits_t bits = xEventGroupGetBits(s_event_group);
   if (bits & BIT_STOP)
   {
-    xEventGroupClearBits(s_event_group, BIT_STOP | BIT_GOT_IP | BIT_FAIL |
-                                            BIT_DISCONNECTED);
+    xEventGroupClearBits(s_event_group, BIT_STOP | BIT_GOT_IP | BIT_FAIL | BIT_DISCONNECTED);
     ESP_LOGI(TAG, "Stop signal received");
     set_state(WIFI_ST_IDLE);
     return true;
@@ -128,8 +126,7 @@ static bool check_stop_signal(void)
 // ============================================================
 // Event handler — ONLY sets bits, zero logic
 // ============================================================
-static void wifi_event_handler(void *arg, esp_event_base_t base,
-                               int32_t id, void *data)
+static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
   if (base == WIFI_EVENT)
   {
@@ -293,9 +290,8 @@ static bool try_connect_candidate(const wifi_ap_record_t *ap, const char *passwo
   xEventGroupClearBits(s_event_group, BIT_GOT_IP | BIT_FAIL | BIT_DISCONNECTED);
   esp_wifi_connect();
 
-  EventBits_t bits = xEventGroupWaitBits(
-      s_event_group, BIT_GOT_IP | BIT_DISCONNECTED,
-      pdTRUE, pdFALSE, pdMS_TO_TICKS(CONNECT_TIMEOUT_MS));
+  EventBits_t bits = xEventGroupWaitBits(s_event_group, BIT_GOT_IP | BIT_DISCONNECTED, pdTRUE, pdFALSE,
+                                         pdMS_TO_TICKS(CONNECT_TIMEOUT_MS));
 
   if (bits & BIT_GOT_IP)
   {
@@ -357,8 +353,7 @@ static void wifi_task(void *arg)
   {
     if (s_cred_map.buckets[i].occupied)
     {
-      ESP_LOGI(TAG, "  SSID: \"%s\"  (pass: %s)",
-               s_cred_map.buckets[i].ssid,
+      ESP_LOGI(TAG, "  SSID: \"%s\"  (pass: %s)", s_cred_map.buckets[i].ssid,
                s_cred_map.buckets[i].password[0] ? "***" : "<open>");
     }
   }
@@ -368,15 +363,13 @@ static void wifi_task(void *arg)
   esp_err_t ret = esp_wifi_start();
   if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "esp_wifi_start failed: %s — task waiting for restart",
-             esp_err_to_name(ret));
+    ESP_LOGE(TAG, "esp_wifi_start failed: %s — task waiting for restart", esp_err_to_name(ret));
     for (;;)
     {
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     }
   }
-  xEventGroupWaitBits(s_event_group, BIT_STA_START,
-                      pdTRUE, pdFALSE, pdMS_TO_TICKS(5000));
+  xEventGroupWaitBits(s_event_group, BIT_STA_START, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000));
 
   // Allocate merged AP buffer (reused across all scan cycles)
   s_ap_list = calloc(MAX_UNIQUE_APS, sizeof(wifi_ap_record_t));
@@ -434,8 +427,7 @@ static void wifi_task(void *arg)
       // Multi-round aggregated scan
       memset(s_ap_list, 0, MAX_UNIQUE_APS * sizeof(wifi_ap_record_t));
       int ap_count = do_aggregated_scan(s_ap_list, MAX_UNIQUE_APS);
-      ESP_LOGI(TAG, "Aggregated scan: %d unique APs after %d rounds",
-               ap_count, SCAN_ROUNDS);
+      ESP_LOGI(TAG, "Aggregated scan: %d unique APs after %d rounds", ap_count, SCAN_ROUNDS);
       fire_event(WIFI_MGR_SCAN_DONE);
 
       if (ap_count == 0)
@@ -452,9 +444,8 @@ static void wifi_task(void *arg)
       ESP_LOGI(TAG, "=== Merged WiFi networks (%d) ===", ap_count);
       for (int i = 0; i < ap_count; i++)
       {
-        ESP_LOGI(TAG, "  [%2d] %-32s  RSSI:%d  CH:%d",
-                 i + 1, (const char *)s_ap_list[i].ssid,
-                 s_ap_list[i].rssi, s_ap_list[i].primary);
+        ESP_LOGI(TAG, "  [%2d] %-32s  RSSI:%d  CH:%d", i + 1, (const char *)s_ap_list[i].ssid, s_ap_list[i].rssi,
+                 s_ap_list[i].primary);
       }
 
       // Match against credential hash map — build candidate list
@@ -539,8 +530,7 @@ static void wifi_task(void *arg)
         // All candidates failed — backoff and re-scan (infinite)
         fire_event(WIFI_MGR_ALL_FAILED);
         uint32_t delay = calc_backoff_ms(s_scan_attempt, SCAN_RETRY_BASE_MS, SCAN_RETRY_MAX_MS);
-        ESP_LOGW(TAG, "All candidates failed — retry in %" PRIu32 "ms (attempt %d)...",
-                 delay, s_scan_attempt + 1);
+        ESP_LOGW(TAG, "All candidates failed — retry in %" PRIu32 "ms (attempt %d)...", delay, s_scan_attempt + 1);
         s_scan_attempt++;
         vTaskDelay(pdMS_TO_TICKS(delay));
         set_state(WIFI_ST_SCANNING);
@@ -583,9 +573,8 @@ static void wifi_task(void *arg)
     case WIFI_ST_CONNECTED:
     {
       // Block until something happens
-      EventBits_t bits = xEventGroupWaitBits(
-          s_event_group, BIT_DISCONNECTED | BIT_STOP,
-          pdTRUE, pdFALSE, portMAX_DELAY);
+      EventBits_t bits =
+          xEventGroupWaitBits(s_event_group, BIT_DISCONNECTED | BIT_STOP, pdTRUE, pdFALSE, portMAX_DELAY);
 
       if (bits & BIT_STOP)
       {
@@ -615,17 +604,16 @@ static void wifi_task(void *arg)
           goto loop_continue;
         }
 
-        uint32_t delay = calc_backoff_ms(r, RECONNECT_BASE_DELAY_MS,
-                                         RECONNECT_BASE_DELAY_MS << RECONNECT_SAME_SSID_MAX);
-        ESP_LOGI(TAG, "Reconnect retry %d/%d \"%s\" (backoff: %" PRIu32 "ms)...",
-                 r + 1, RECONNECT_SAME_SSID_MAX, s_connected_ssid, delay);
+        uint32_t delay =
+            calc_backoff_ms(r, RECONNECT_BASE_DELAY_MS, RECONNECT_BASE_DELAY_MS << RECONNECT_SAME_SSID_MAX);
+        ESP_LOGI(TAG, "Reconnect retry %d/%d \"%s\" (backoff: %" PRIu32 "ms)...", r + 1, RECONNECT_SAME_SSID_MAX,
+                 s_connected_ssid, delay);
 
         xEventGroupClearBits(s_event_group, BIT_GOT_IP | BIT_DISCONNECTED);
         esp_wifi_connect();
 
-        EventBits_t bits = xEventGroupWaitBits(
-            s_event_group, BIT_GOT_IP | BIT_DISCONNECTED,
-            pdTRUE, pdFALSE, pdMS_TO_TICKS(CONNECT_TIMEOUT_MS));
+        EventBits_t bits = xEventGroupWaitBits(s_event_group, BIT_GOT_IP | BIT_DISCONNECTED, pdTRUE, pdFALSE,
+                                               pdMS_TO_TICKS(CONNECT_TIMEOUT_MS));
 
         if (bits & BIT_GOT_IP)
         {
@@ -685,21 +673,18 @@ esp_err_t wifi_manager_init(void)
   s_mutex = xSemaphoreCreateMutex();
 
   // Event handlers — bits only
-  ESP_ERROR_CHECK(esp_event_handler_instance_register(
-      WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
-  ESP_ERROR_CHECK(esp_event_handler_instance_register(
-      IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
 
   // Station mode
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
   // Create persistent task (starts in IDLE, waits for notification)
-  BaseType_t xret = xTaskCreatePinnedToCore(
-      wifi_task, "wifi_mgr",
-      4096 * 2, // 8KB stack
-      NULL, 3,  // Priority 3
-      &s_task_handle,
-      0); // Pin to core 0 (WiFi core)
+  BaseType_t xret = xTaskCreatePinnedToCore(wifi_task, "wifi_mgr",
+                                            4096 * 2, // 8KB stack
+                                            NULL, 3,  // Priority 3
+                                            &s_task_handle,
+                                            0); // Pin to core 0 (WiFi core)
 
   if (xret != pdPASS)
   {

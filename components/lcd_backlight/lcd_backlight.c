@@ -43,12 +43,11 @@ esp_err_t lcd_backlight_init(const lcd_backlight_config_t *config, lcd_backlight
     return ESP_ERR_NO_MEM;
   }
 
-  const ledc_timer_config_t timer_cfg = {
-      .speed_mode = LEDC_LOW_SPEED_MODE,
-      .duty_resolution = LCD_BACKLIGHT_DUTY_RES,
-      .timer_num = config->timer_num,
-      .freq_hz = config->pwm_freq_hz,
-      .clk_cfg = LEDC_AUTO_CLK};
+  const ledc_timer_config_t timer_cfg = {.speed_mode = LEDC_LOW_SPEED_MODE,
+                                         .duty_resolution = LCD_BACKLIGHT_DUTY_RES,
+                                         .timer_num = config->timer_num,
+                                         .freq_hz = config->pwm_freq_hz,
+                                         .clk_cfg = LEDC_AUTO_CLK};
   err = ledc_timer_config(&timer_cfg);
   if (err != ESP_OK)
   {
@@ -56,14 +55,13 @@ esp_err_t lcd_backlight_init(const lcd_backlight_config_t *config, lcd_backlight
     goto cleanup;
   }
 
-  const ledc_channel_config_t channel_cfg = {
-      .gpio_num = config->gpio_num,
-      .speed_mode = LEDC_LOW_SPEED_MODE,
-      .channel = config->channel_num,
-      .intr_type = LEDC_INTR_DISABLE,
-      .timer_sel = config->timer_num,
-      .duty = 0,
-      .hpoint = 0};
+  const ledc_channel_config_t channel_cfg = {.gpio_num = config->gpio_num,
+                                             .speed_mode = LEDC_LOW_SPEED_MODE,
+                                             .channel = config->channel_num,
+                                             .intr_type = LEDC_INTR_DISABLE,
+                                             .timer_sel = config->timer_num,
+                                             .duty = 0,
+                                             .hpoint = 0};
   err = ledc_channel_config(&channel_cfg);
   if (err != ESP_OK)
   {

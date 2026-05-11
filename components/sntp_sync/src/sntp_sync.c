@@ -59,8 +59,7 @@ static bool wait_for_sync(int max_retries)
     {
       return true;
     }
-    ESP_LOGI(TAG, "Sync poll %d/%d (ret=%s)", retry + 1, max_retries,
-             esp_err_to_name(ret));
+    ESP_LOGI(TAG, "Sync poll %d/%d (ret=%s)", retry + 1, max_retries, esp_err_to_name(ret));
   }
   return false;
 }
@@ -177,9 +176,7 @@ esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync)
 #endif
 
   // Spawn persistent SNTP task (initial sync + periodic re-sync)
-  BaseType_t xret = xTaskCreate(
-      sntp_task, "sntp_sync",
-      3072, NULL, 2, &s_sntp_task);
+  BaseType_t xret = xTaskCreate(sntp_task, "sntp_sync", 3072, NULL, 2, &s_sntp_task);
 
   return (xret == pdPASS) ? ESP_OK : ESP_FAIL;
 }

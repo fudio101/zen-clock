@@ -45,9 +45,8 @@ static void init_i80_bus(esp_lcd_panel_io_handle_t *io_handle)
       .clk_src = LCD_CLK_SRC_DEFAULT,
       .dc_gpio_num = PIN_LCD_DC,
       .wr_gpio_num = PIN_LCD_WR,
-      .data_gpio_nums = {
-          PIN_LCD_D0, PIN_LCD_D1, PIN_LCD_D2, PIN_LCD_D3,
-          PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7},
+      .data_gpio_nums = {PIN_LCD_D0, PIN_LCD_D1, PIN_LCD_D2, PIN_LCD_D3, PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6,
+                         PIN_LCD_D7},
       .bus_width = I80_BUS_WIDTH,
       .max_transfer_bytes = LCD_H_RES * LCD_V_RES * sizeof(uint16_t),
   };
@@ -57,12 +56,13 @@ static void init_i80_bus(esp_lcd_panel_io_handle_t *io_handle)
       .cs_gpio_num = PIN_LCD_CS,
       .pclk_hz = PIXEL_CLOCK_HZ,
       .trans_queue_depth = I80_TRANS_QUEUE_DEPTH,
-      .dc_levels = {
-          .dc_idle_level = I80_DC_CMD_LEVEL,
-          .dc_cmd_level = I80_DC_CMD_LEVEL,
-          .dc_dummy_level = I80_DC_DUMMY_LEVEL,
-          .dc_data_level = I80_DC_DATA_LEVEL,
-      },
+      .dc_levels =
+          {
+              .dc_idle_level = I80_DC_CMD_LEVEL,
+              .dc_cmd_level = I80_DC_CMD_LEVEL,
+              .dc_dummy_level = I80_DC_DUMMY_LEVEL,
+              .dc_data_level = I80_DC_DATA_LEVEL,
+          },
       .lcd_cmd_bits = CMD_BITS,
       .lcd_param_bits = PARAM_BITS,
   };
@@ -114,30 +114,28 @@ static void init_power(void)
 // ============================================================
 // LVGL Display Registration
 // ============================================================
-static lv_disp_t *register_lvgl_display(
-    esp_lcd_panel_io_handle_t io_handle,
-    esp_lcd_panel_handle_t panel)
+static lv_disp_t *register_lvgl_display(esp_lcd_panel_io_handle_t io_handle, esp_lcd_panel_handle_t panel)
 {
   ESP_LOGI(TAG, "Registering display with LVGL port...");
 
-  const lvgl_port_display_cfg_t disp_cfg = {
-      .io_handle = io_handle,
-      .panel_handle = panel,
-      .buffer_size = LVGL_BUF_SIZE,
-      .double_buffer = true,
-      .hres = LCD_H_RES,
-      .vres = LCD_V_RES,
-      .monochrome = false,
-      .color_format = LV_COLOR_FORMAT_RGB565,
-      .rotation = {
-          .swap_xy = true,
-          .mirror_x = false,
-          .mirror_y = true,
-      },
-      .flags = {
-          .buff_spiram = true,
-          .swap_bytes = true,
-      }};
+  const lvgl_port_display_cfg_t disp_cfg = {.io_handle = io_handle,
+                                            .panel_handle = panel,
+                                            .buffer_size = LVGL_BUF_SIZE,
+                                            .double_buffer = true,
+                                            .hres = LCD_H_RES,
+                                            .vres = LCD_V_RES,
+                                            .monochrome = false,
+                                            .color_format = LV_COLOR_FORMAT_RGB565,
+                                            .rotation =
+                                                {
+                                                    .swap_xy = true,
+                                                    .mirror_x = false,
+                                                    .mirror_y = true,
+                                                },
+                                            .flags = {
+                                                .buff_spiram = true,
+                                                .swap_bytes = true,
+                                            }};
   return lvgl_port_add_disp(&disp_cfg);
 }
 
@@ -147,12 +145,11 @@ static lv_disp_t *register_lvgl_display(
 void bsp_display_init(lv_disp_t **disp_handle, bool backlight_on)
 {
   // LVGL port initialization
-  const lvgl_port_cfg_t lvgl_cfg = {
-      .task_priority = LVGL_TASK_PRIORITY,
-      .task_stack = LVGL_TASK_STACK_SIZE,
-      .task_affinity = 1,
-      .task_max_sleep_ms = LVGL_MAX_SLEEP_MS,
-      .timer_period_ms = LVGL_TICK_PERIOD_MS};
+  const lvgl_port_cfg_t lvgl_cfg = {.task_priority = LVGL_TASK_PRIORITY,
+                                    .task_stack = LVGL_TASK_STACK_SIZE,
+                                    .task_affinity = 1,
+                                    .task_max_sleep_ms = LVGL_MAX_SLEEP_MS,
+                                    .timer_period_ms = LVGL_TICK_PERIOD_MS};
   ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
 
   init_power();
