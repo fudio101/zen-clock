@@ -9,6 +9,8 @@
 #include "wifi_manager.h"
 #include "sntp_sync.h"
 #include "status_bar.h"
+#include "settings.h"
+#include "esp_timer.h"
 
 static const char *TAG = "ZenClock";
 
@@ -24,11 +26,27 @@ static void on_button_press(int btn_id, bool pressed)
     return; // only handle press, not release
   }
 
+  static int64_t last_boot_press_time = 0;
+  int64_t now = esp_timer_get_time();
+
   uint8_t current = bsp_display_get_brightness();
   uint8_t target = current;
 
   if (btn_id == BSP_BTN_BOOT)
   {
+    if (now - last_boot_press_time < 500000) // 500ms double click
+    {
+      bool current_theme_light = settings_get_theme_light();
+      settings_set_theme_light(!current_theme_light);
+      lvgl_port_lock(0);
+      ui_set_theme(!current_theme_light);
+      lvgl_port_unlock();
+      ESP_LOGI(TAG, "Theme toggled to %s", !current_theme_light ? "Light" : "Dark");
+      last_boot_press_time = 0; // reset
+      return;
+    }
+    last_boot_press_time = now;
+
     // BOOT button → brightness UP
     target = (current <= 100 - BRIGHTNESS_STEP) ? current + BRIGHTNESS_STEP : 100;
   }
@@ -153,9 +171,13 @@ void app_main(void)
   static lv_display_t *disp_handle;
   bsp_display_init(&disp_handle, false);
 
+  // Initialize NVS and load settings
+  settings_init();
+  bool is_light = settings_get_theme_light();
+
   // Initialize UI (self-contained: creates all widgets + timers)
   lvgl_port_lock(0);
-  ui_init();
+  ui_init(is_light);
   lvgl_port_unlock();
 
   // Fade in backlight smoothly over 2 seconds

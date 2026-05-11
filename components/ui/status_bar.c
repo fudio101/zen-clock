@@ -121,7 +121,6 @@ void status_bar_create(lv_obj_t *parent)
   lv_obj_set_height(s_wifi_icon, LV_SIZE_CONTENT);
   lv_obj_align_to(s_wifi_icon, s_bat_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
   lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_40, 0); // Dim initially
-  lv_obj_set_style_text_color(s_wifi_icon, lv_color_white(), 0);
   lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
 
   // --- SNTP icon (left of WiFi icon) ---
@@ -130,7 +129,6 @@ void status_bar_create(lv_obj_t *parent)
   lv_obj_set_height(s_sntp_icon, LV_SIZE_CONTENT);
   lv_obj_align_to(s_sntp_icon, s_wifi_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
   lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_40, 0); // Dim initially
-  lv_obj_set_style_text_color(s_sntp_icon, lv_color_white(), 0);
   lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
 
   // --- LVGL timer: update battery every 30 seconds ---
@@ -150,34 +148,34 @@ void status_bar_set_wifi_status(wifi_status_t status)
   case WIFI_STATUS_DISCONNECTED:
     lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_40, 0);
-    lv_obj_set_style_text_color(s_wifi_icon, lv_color_white(), 0);
+    lv_obj_remove_local_style_prop(s_wifi_icon, LV_STYLE_TEXT_COLOR, 0);
     break;
 
   case WIFI_STATUS_SCANNING:
     lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_70, 0);
-    lv_obj_set_style_text_color(s_wifi_icon, lv_color_white(), 0); // Dimmed white
+    lv_obj_remove_local_style_prop(s_wifi_icon, LV_STYLE_TEXT_COLOR, 0);
     break;
 
   case WIFI_STATUS_CONNECTING:
     lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_wifi_icon,
-                                lv_color_make(255, 200, 0), 0); // Yellow
+                                lv_palette_main(LV_PALETTE_ORANGE), 0);
     break;
 
   case WIFI_STATUS_VERIFYING:
     lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_wifi_icon,
-                                lv_color_make(100, 200, 255), 0); // Light blue
+                                lv_palette_main(LV_PALETTE_LIGHT_BLUE), 0);
     break;
 
   case WIFI_STATUS_CONNECTED:
     lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_wifi_icon,
-                                lv_color_make(0, 255, 100), 0); // Green
+                                lv_palette_main(LV_PALETTE_GREEN), 0);
     break;
   }
 
@@ -197,28 +195,28 @@ void status_bar_set_sntp_status(sntp_status_t status)
   case SNTP_STATUS_IDLE:
     lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_40, 0);
-    lv_obj_set_style_text_color(s_sntp_icon, lv_color_white(), 0);
+    lv_obj_remove_local_style_prop(s_sntp_icon, LV_STYLE_TEXT_COLOR, 0);
     break;
 
   case SNTP_STATUS_SYNCING:
     lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_sntp_icon,
-                                lv_color_make(255, 200, 0), 0); // Yellow
+                                lv_palette_main(LV_PALETTE_ORANGE), 0);
     break;
 
   case SNTP_STATUS_SYNCED:
     lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_sntp_icon,
-                                lv_color_make(0, 255, 100), 0); // Green
+                                lv_palette_main(LV_PALETTE_GREEN), 0);
     break;
 
   case SNTP_STATUS_FAILED:
     lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_sntp_icon,
-                                lv_color_make(255, 60, 60), 0); // Red
+                                lv_palette_main(LV_PALETTE_RED), 0);
     break;
   }
 

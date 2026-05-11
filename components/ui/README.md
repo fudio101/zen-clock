@@ -7,7 +7,7 @@
 
 | File | Purpose |
 |---|---|
-| `ui.h` | Public API — `ui_init()` only, no widget handles exposed |
+| `ui.h` | Public API — `ui_init(is_light)` and `ui_set_theme(is_light)` |
 | `ui.c` | Screen + theme + module composition (calls sub-modules) |
 | `clock_face.h` | Clock face API — `clock_face_create(parent)` |
 | `clock_face_text.c` | Text-based clock implementation (Montserrat 48 time, Montserrat 14 date) |
@@ -18,7 +18,7 @@
 ## Architecture
 
 ```
-main.c ──► ui.h ──► ui_init()
+main.c ──► ui.h ──► ui_init(is_light)
                       ├── clock_face.h ──► clock_face_create(parent)
                       └── status_bar.h ──► status_bar_create(parent)
 ```
@@ -31,11 +31,15 @@ main.c ──► ui.h ──► ui_init()
 
 Header: [`ui.h`](ui.h)
 
-### `ui_init()`
+### `ui_init(bool is_light)`
 
-Creates the screen, initializes the LVGL default theme, and delegates widget creation to sub-modules. Each module creates its own LVGL timer for automatic updates.
+Creates the screen, initializes the LVGL default theme (Light or Dark), and delegates widget creation to sub-modules. Each module creates its own LVGL timer for automatic updates.
 
 **Must be called inside `lvgl_port_lock(0)` / `lvgl_port_unlock()`.**
+
+### `ui_set_theme(bool is_light)`
+
+Dynamically switches the active LVGL theme between Light and Dark mode without requiring a system reboot. Call this when the user changes the theme setting.
 
 ## Widget Modules
 
@@ -102,3 +106,4 @@ Only 1 line changes. `ui.c`, `main.c`, `status_bar.c` remain untouched.
 5. **Use fixed width for frequently-updated labels** — `LV_SIZE_CONTENT` with large fonts causes smearing when text width changes.
 6. **Keep widget handles private** — use `static` in each module, never expose via headers.
 7. **Each module owns its timers** — create timers inside `_create()`, not in `main.c`.
+8. **Do NOT hardcode colors like `lv_color_white()`** for normal text — the UI supports both Light and Dark themes. Let the widget inherit the theme's default text color, or use `lv_palette_main()` for dynamic states (e.g., green for connected, red for error) so they remain visible on both black and white backgrounds.

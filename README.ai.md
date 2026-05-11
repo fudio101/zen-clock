@@ -42,6 +42,10 @@ SNTP time synchronization (non-blocking task, periodic re-sync).
 Robust WiFi connection and scan manager (multi-round scanning, exponential backoff).
 📖 **[Full docs: `wifi_manager/README.md`](components/wifi_manager/README.md)** — state machine and API.
 
+### `components/settings/`
+Persistent configuration manager via NVS (Non-Volatile Storage).
+📖 **[Full docs: `settings/README.md`](components/settings/README.md)** — API and context.
+
 ## 3. app_main Pattern
 
 ```c
