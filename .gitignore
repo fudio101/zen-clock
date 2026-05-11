@@ -5,3 +5,7 @@
 .vscode/ipch
 example/
 managed_components/
+
+# WiFi credentials (private)
+wifi_config.csv
+include/wifi_credentials.gen.h

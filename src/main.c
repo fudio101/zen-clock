@@ -6,6 +6,9 @@
 #include "bsp.h"
 #include "lvgl.h"
 #include "ui.h"
+#include "wifi_manager.h"
+#include "sntp_sync.h"
+#include "status_bar.h"
 
 static const char *TAG = "ZenClock";
 
@@ -40,6 +43,104 @@ static void on_button_press(int btn_id, bool pressed)
 }
 
 // ============================================================
+// SNTP sync callback (called from sntp task)
+// ============================================================
+static void on_sntp_sync(sntp_sync_event_t event)
+{
+  switch (event)
+  {
+  case SNTP_EVENT_SYNCING:
+    ESP_LOGI(TAG, "NTP syncing...");
+    lvgl_port_lock(0);
+    status_bar_set_sntp_status(SNTP_STATUS_SYNCING);
+    lvgl_port_unlock();
+    break;
+
+  case SNTP_EVENT_SYNCED:
+    ESP_LOGI(TAG, "NTP time synchronized!");
+    lvgl_port_lock(0);
+    status_bar_set_sntp_status(SNTP_STATUS_SYNCED);
+    lvgl_port_unlock();
+    break;
+
+  case SNTP_EVENT_FAILED:
+    ESP_LOGW(TAG, "NTP sync failed — clock may show wrong time");
+    lvgl_port_lock(0);
+    status_bar_set_sntp_status(SNTP_STATUS_FAILED);
+    lvgl_port_unlock();
+    break;
+  }
+}
+
+// ============================================================
+// WiFi event callback (called from wifi_connect task)
+// ============================================================
+static void on_wifi_event(wifi_manager_event_t event)
+{
+  switch (event)
+  {
+  case WIFI_MGR_SCANNING:
+    lvgl_port_lock(0);
+    status_bar_set_wifi_status(WIFI_STATUS_SCANNING);
+    lvgl_port_unlock();
+    break;
+
+  case WIFI_MGR_CONNECTING:
+    lvgl_port_lock(0);
+    status_bar_set_wifi_status(WIFI_STATUS_CONNECTING);
+    lvgl_port_unlock();
+    break;
+
+  case WIFI_MGR_GOT_IP:
+    ESP_LOGI(TAG, "WiFi got IP — verifying internet...");
+    lvgl_port_lock(0);
+    status_bar_set_wifi_status(WIFI_STATUS_VERIFYING);
+    lvgl_port_unlock();
+    break;
+
+  case WIFI_MGR_CONNECTED:
+    ESP_LOGI(TAG, "WiFi verified online — starting NTP sync...");
+    lvgl_port_lock(0);
+    status_bar_set_wifi_status(WIFI_STATUS_CONNECTED);
+    lvgl_port_unlock();
+    sntp_sync_start(on_sntp_sync);
+    break;
+
+  case WIFI_MGR_DISCONNECTED:
+    ESP_LOGW(TAG, "WiFi disconnected");
+    lvgl_port_lock(0);
+    status_bar_set_wifi_status(WIFI_STATUS_DISCONNECTED);
+    lvgl_port_unlock();
+    break;
+
+  case WIFI_MGR_RECONNECTING:
+    ESP_LOGW(TAG, "WiFi reconnecting...");
+    lvgl_port_lock(0);
+    status_bar_set_wifi_status(WIFI_STATUS_CONNECTING);
+    lvgl_port_unlock();
+    break;
+
+  case WIFI_MGR_SCAN_DONE:
+    ESP_LOGI(TAG, "WiFi scan complete");
+    break;
+
+  case WIFI_MGR_NO_MATCH:
+    ESP_LOGW(TAG, "No stored WiFi network found nearby");
+    lvgl_port_lock(0);
+    status_bar_set_wifi_status(WIFI_STATUS_DISCONNECTED);
+    lvgl_port_unlock();
+    break;
+
+  case WIFI_MGR_ALL_FAILED:
+    ESP_LOGW(TAG, "Scan cycle failed — retrying...");
+    lvgl_port_lock(0);
+    status_bar_set_wifi_status(WIFI_STATUS_DISCONNECTED);
+    lvgl_port_unlock();
+    break;
+  }
+}
+
+// ============================================================
 // Application entry point
 // ============================================================
 void app_main(void)
@@ -63,8 +164,14 @@ void app_main(void)
   // Initialize buttons for brightness control
   bsp_buttons_init(on_button_press);
 
+  // WiFi auto-connect (async: scan → match → connect → NTP sync)
+  wifi_manager_init();
+  wifi_manager_set_callback(on_wifi_event);
+  wifi_manager_start();
+
   ESP_LOGI(TAG, "ZenClock started — BOOT=bright+, IO14=bright-");
 
   // app_main returns; FreeRTOS scheduler continues running
   // LVGL task handles rendering + clock/battery timer callbacks
+  // WiFi task handles scan/connect in background
 }

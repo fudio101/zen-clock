@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// ZenClock — Status bar (battery icon + percentage)
+// ZenClock — Status bar (SNTP indicator + WiFi indicator + battery icon + percentage)
 
 #include "status_bar.h"
 #include "bsp.h"
@@ -14,9 +14,34 @@ static const char *TAG = "StatusBar";
 // ============================================================
 static lv_obj_t *s_bat_icon = NULL;
 static lv_obj_t *s_bat_pct = NULL;
+static lv_obj_t *s_wifi_icon = NULL;
+static lv_obj_t *s_sntp_icon = NULL;
 
 // ============================================================
-// Timer callback — runs inside lv_timer_handler() on LVGL task
+// Re-align the status bar chain (right-to-left)
+//
+// Layout: [SNTP] [WiFi] [BatIcon] [BatPct]  ← screen edge
+// ============================================================
+static void realign_chain(void)
+{
+  // Battery icon stays left of battery percentage
+  lv_obj_align_to(s_bat_icon, s_bat_pct, LV_ALIGN_OUT_LEFT_MID, -4, 0);
+
+  // WiFi icon stays left of battery icon
+  if (s_wifi_icon)
+  {
+    lv_obj_align_to(s_wifi_icon, s_bat_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
+  }
+
+  // SNTP icon stays left of WiFi icon
+  if (s_sntp_icon && s_wifi_icon)
+  {
+    lv_obj_align_to(s_sntp_icon, s_wifi_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
+  }
+}
+
+// ============================================================
+// Battery timer callback — runs inside lv_timer_handler()
 // ============================================================
 static void battery_timer_cb(lv_timer_t *timer)
 {
@@ -67,8 +92,8 @@ static void battery_timer_cb(lv_timer_t *timer)
     lv_label_set_text(s_bat_icon, LV_SYMBOL_BATTERY_EMPTY);
   }
 
-  // Re-align icon to stay left of percentage (text width may have changed)
-  lv_obj_align_to(s_bat_icon, s_bat_pct, LV_ALIGN_OUT_LEFT_MID, -4, 0);
+  // Re-align entire chain (text width may have changed)
+  realign_chain();
 }
 
 // ============================================================
@@ -90,7 +115,113 @@ void status_bar_create(lv_obj_t *parent)
   lv_obj_align_to(s_bat_icon, s_bat_pct, LV_ALIGN_OUT_LEFT_MID, -4, 0);
   lv_label_set_text(s_bat_icon, LV_SYMBOL_BATTERY_FULL);
 
-  // --- LVGL timer: update every 30 seconds ---
+  // --- WiFi icon (left of battery icon) ---
+  s_wifi_icon = lv_label_create(parent);
+  lv_obj_set_width(s_wifi_icon, LV_SIZE_CONTENT);
+  lv_obj_set_height(s_wifi_icon, LV_SIZE_CONTENT);
+  lv_obj_align_to(s_wifi_icon, s_bat_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
+  lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_40, 0); // Dim initially
+  lv_obj_set_style_text_color(s_wifi_icon, lv_color_white(), 0);
+  lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
+
+  // --- SNTP icon (left of WiFi icon) ---
+  s_sntp_icon = lv_label_create(parent);
+  lv_obj_set_width(s_sntp_icon, LV_SIZE_CONTENT);
+  lv_obj_set_height(s_sntp_icon, LV_SIZE_CONTENT);
+  lv_obj_align_to(s_sntp_icon, s_wifi_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
+  lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_40, 0); // Dim initially
+  lv_obj_set_style_text_color(s_sntp_icon, lv_color_white(), 0);
+  lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
+
+  // --- LVGL timer: update battery every 30 seconds ---
   lv_timer_t *timer = lv_timer_create(battery_timer_cb, 30000, NULL);
   lv_timer_ready(timer); // Fire immediately on first tick
+}
+
+void status_bar_set_wifi_status(wifi_status_t status)
+{
+  if (!s_wifi_icon)
+  {
+    return;
+  }
+
+  switch (status)
+  {
+  case WIFI_STATUS_DISCONNECTED:
+    lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_40, 0);
+    lv_obj_set_style_text_color(s_wifi_icon, lv_color_white(), 0);
+    break;
+
+  case WIFI_STATUS_SCANNING:
+    lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_70, 0);
+    lv_obj_set_style_text_color(s_wifi_icon, lv_color_white(), 0); // Dimmed white
+    break;
+
+  case WIFI_STATUS_CONNECTING:
+    lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_wifi_icon,
+                                lv_color_make(255, 200, 0), 0); // Yellow
+    break;
+
+  case WIFI_STATUS_VERIFYING:
+    lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_wifi_icon,
+                                lv_color_make(100, 200, 255), 0); // Light blue
+    break;
+
+  case WIFI_STATUS_CONNECTED:
+    lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_wifi_icon,
+                                lv_color_make(0, 255, 100), 0); // Green
+    break;
+  }
+
+  // Re-align entire chain after icon change
+  realign_chain();
+}
+
+void status_bar_set_sntp_status(sntp_status_t status)
+{
+  if (!s_sntp_icon)
+  {
+    return;
+  }
+
+  switch (status)
+  {
+  case SNTP_STATUS_IDLE:
+    lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
+    lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_40, 0);
+    lv_obj_set_style_text_color(s_sntp_icon, lv_color_white(), 0);
+    break;
+
+  case SNTP_STATUS_SYNCING:
+    lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
+    lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_sntp_icon,
+                                lv_color_make(255, 200, 0), 0); // Yellow
+    break;
+
+  case SNTP_STATUS_SYNCED:
+    lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
+    lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_sntp_icon,
+                                lv_color_make(0, 255, 100), 0); // Green
+    break;
+
+  case SNTP_STATUS_FAILED:
+    lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
+    lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_sntp_icon,
+                                lv_color_make(255, 60, 60), 0); // Red
+    break;
+  }
+
+  // Re-align entire chain after icon change
+  realign_chain();
 }

@@ -40,10 +40,14 @@ ZenClock/
 │   │       ├── bsp_backlight.c # Brightness facade
 │   │       └── bsp_buttons.c  # Button ISR + debounce
 │   ├── lcd_backlight/         # PWM backlight driver (LEDC wrapper)
-│   └── ui/                    # Hand-written LVGL UI
-│       ├── README.md          # 📖 Layout, constraints & widget docs
-│       ├── ui.h               # Public API + widget handles
-│       └── ui.c               # Screen creation + widget layout
+│   ├── sntp_sync/             # SNTP time synchronization
+│   │   └── README.md          # 📖 SNTP architecture & API docs
+│   ├── ui/                    # Hand-written LVGL UI
+│   │   ├── README.md          # 📖 Layout, constraints & widget docs
+│   │   ├── ui.h               # Public API + widget handles
+│   │   └── ui.c               # Screen creation + widget layout
+│   └── wifi_manager/          # Robust WiFi connection & scan manager
+│       └── README.md          # 📖 WiFi manager API & architecture
 ├── include/
 │   └── board_config.h         # Pin definitions and board constants (single source)
 ├── src/
@@ -55,7 +59,7 @@ ZenClock/
 └── sdkconfig.lilygo-t-display-s3
 ```
 
-> **Component docs:** See [`components/bsp/README.md`](components/bsp/README.md) and [`components/ui/README.md`](components/ui/README.md) for detailed API documentation.
+> **Component docs:** See [`components/bsp/README.md`](components/bsp/README.md), [`components/ui/README.md`](components/ui/README.md), [`components/sntp_sync/README.md`](components/sntp_sync/README.md), and [`components/wifi_manager/README.md`](components/wifi_manager/README.md) for detailed API documentation.
 
 ## Getting Started
 

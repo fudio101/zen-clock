@@ -1,0 +1,9 @@
+# WiFi credentials for ZenClock
+# Copy this file to wifi_config.csv and fill in your networks.
+# Format: SSID,Password (leave password empty for open networks)
+# This file (wifi_config.csv) is gitignored — your credentials stay private.
+#
+# Example:
+# MyHomeWiFi,supersecret123
+# OfficeNetwork,office@2026
+# CafeOpenWiFi,

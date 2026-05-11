@@ -34,6 +34,14 @@ Screen creation, theme init, widget layout. No auto-generated code.
 PWM (LEDC) wrapper for screen brightness (10-bit, 0-100%).
 **Do NOT call directly** — use `bsp_display_set_brightness()`.
 
+### `components/sntp_sync/`
+SNTP time synchronization (non-blocking task, periodic re-sync).
+📖 **[Full docs: `sntp_sync/README.md`](components/sntp_sync/README.md)** — usage and API.
+
+### `components/wifi_manager/`
+Robust WiFi connection and scan manager (multi-round scanning, exponential backoff).
+📖 **[Full docs: `wifi_manager/README.md`](components/wifi_manager/README.md)** — state machine and API.
+
 ## 3. app_main Pattern
 
 ```c

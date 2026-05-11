@@ -13,7 +13,7 @@ void ui_init(void)
       dispp,
       lv_palette_main(LV_PALETTE_BLUE),
       lv_palette_main(LV_PALETTE_RED),
-      false, LV_FONT_DEFAULT);
+      true, LV_FONT_DEFAULT);
   lv_disp_set_theme(dispp, theme);
 
   // --- Main screen ---
