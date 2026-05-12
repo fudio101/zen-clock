@@ -1,10 +1,7 @@
-#include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
-#include <sys/time.h>
 #include <esp_log.h>
-#include "freertos/FreeRTOS.h"
 #include "bsp.h"
-#include "lvgl.h"
 #include "ui.h"
 #include "wifi_manager.h"
 #include "sntp_sync.h"

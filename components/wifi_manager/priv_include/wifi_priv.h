@@ -5,7 +5,6 @@
 #pragma once
 
 #include <stdbool.h>
-#include <stdint.h>
 
 // ============================================================
 // SSID Hash Map — O(1) lookup for scan matching

@@ -1,0 +1,18 @@
+CompileFlags:
+  # Remove flags that clangd cannot process
+  Remove:
+    - -mlongcalls
+    - -mdisable-hardware-atomics
+    - -fno-tree-switch-conversion
+    - -fstrict-volatile-bitfields
+    - -fzero-init-padding-bits=*
+    - -fno-malloc-dce
+    - -fmacro-prefix-map=*
+
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+  Suppress:
+    # "architecture not supported" from newlib/system headers
+    # when cross-compiling for Xtensa on macOS host
+    - pp_hash_error

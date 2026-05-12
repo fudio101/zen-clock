@@ -1,6 +1,6 @@
 dependencies:
   espressif/esp_lvgl_port:
-    component_hash: 87bcb7ffebf255154445c2d7b4580e12f94efa43e6cf136214e4b9250e6848ae
+    component_hash: 11bb426c9b3936fc5ef82cc96c503a1b908f83cd3b251cbd769b0e0e14bc107b
     dependencies:
     - name: idf
       version: '>=5.2'
