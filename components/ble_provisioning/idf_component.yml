@@ -1,0 +1,8 @@
+## IDF Component Manager Manifest File
+## ZenClock BLE Provisioning — requires network_provisioning (IDF v6 replacement for wifi_provisioning)
+dependencies:
+  espressif/network_provisioning:
+    version: "^1.2.4"
+  ## Required IDF version
+  idf:
+    version: ">=6.0.0"

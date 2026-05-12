@@ -13,7 +13,7 @@ A beautiful clock project running on the **LilyGo T-Display-S3** board.
 | **Display** | 1.9" ST7789, 320×170, Intel 8080 8-bit parallel |
 | **Backlight** | PWM controlled via ESP-IDF LEDC (lcd_backlight component) |
 | **Battery** | GPIO4 ADC via resistor divider |
-| **Buttons** | GPIO0 (BOOT) + GPIO14 — brightness control |
+| **Buttons** | GPIO0 (BOOT) + GPIO14 — brightness + settings |
 
 ## Software Stack
 
@@ -23,6 +23,7 @@ A beautiful clock project running on the **LilyGo T-Display-S3** board.
 | **Graphics** | LVGL 9.5.0 |
 | **LVGL Port** | [esp_lvgl_port](https://github.com/espressif/esp-bsp/tree/master/components/esp_lvgl_port) |
 | **UI** | Hand-written LVGL code (no external UI designer) |
+| **Provisioning** | espressif/network_provisioning ^1.2.4 (BLE) |
 | **Build System** | PlatformIO + ESP-IDF Component Manager |
 
 ## Project Structure
@@ -47,13 +48,20 @@ ZenClock/
 │   ├── ui/                    # Hand-written LVGL UI
 │   │   ├── README.md          # 📖 Layout, constraints & widget docs
 │   │   ├── ui.h               # Public API + widget handles
-│   │   └── ui.c               # Screen creation + widget layout
-│   └── wifi_manager/          # Robust WiFi connection & scan manager
-│       └── README.md          # 📖 WiFi manager API & architecture
+│   │   ├── ui.c               # Screen creation + widget layout
+│   │   └── prov_screen.c/.h   # QR code overlay for BLE provisioning
+│   ├── wifi_manager/          # WiFi connection + BLE provisioning fallback
+│   │   └── README.md          # 📖 WiFi manager API & architecture
+│   └── ble_provisioning/      # BLE provisioning (espressif/network_provisioning)
+│       ├── include/ble_provisioning.h
+│       ├── src/ble_provisioning.c
+│       ├── CMakeLists.txt
+│       └── idf_component.yml
 ├── include/
 │   └── board_config.h         # Pin definitions and board constants (single source)
 ├── src/
-│   ├── main.c                 # Application entry point + battery task
+│   ├── main.c                 # Application entry point
+│   ├── app_handlers.c/.h      # Event callbacks (button, WiFi, BLE, SNTP)
 │   ├── CMakeLists.txt         # Main component build config
 │   └── idf_component.yml      # LVGL + esp_lvgl_port dependencies
 ├── platformio.ini
@@ -85,9 +93,22 @@ pio device monitor
 
 ### First Boot
 
-After flashing, the display shows the ZenClock UI with a smooth 2-second backlight fade-in. Battery status is displayed in the top-right corner. Use the buttons to adjust brightness:
-- **BOOT button** (GPIO0) — Brightness UP (+10%)
-- **Side button** (GPIO14) — Brightness DOWN (-10%)
+**On first boot (no WiFi credentials in NVS):**
+1. Display shows ZenClock UI with smooth 2-second backlight fade-in
+2. WiFi manager fires `WIFI_MGR_NO_CRED` event → triggers BLE provisioning
+3. BLE provisioning QR code overlay appears on display
+4. Use the [Espressif BLE Provisioning app](https://github.com/espressif/esp-idf/tree/master/tools/esp_prov) to scan QR and provision WiFi
+5. Once connected, provisioning screen closes and clock displays time (synced via SNTP)
+
+**Button Controls:**
+- **BOOT button (GPIO0)**
+  - Single-click: Brightness UP (+10%)
+  - Double-click (500ms): Toggle Light/Dark theme
+- **Side button (GPIO14)**
+  - Single-click: Brightness DOWN (-10%)
+  - Double-click (500ms): Clear WiFi credentials → restart BLE provisioning
+
+Battery status is displayed in the top-right corner.
 
 ---
 

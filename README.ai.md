@@ -14,10 +14,15 @@
 ## 2. Architecture Map
 
 ### `src/main.c`
-- Application entry point (`app_main`) + battery monitoring FreeRTOS task.
+- Application entry point (`app_main`) only — minimal setup and initialization.
 - Calls `bsp_display_init()` → `ui_init()` → `bsp_display_set_brightness()` → `bsp_buttons_init()`.
-- Battery task updates `ui_bat_pct_label` and `ui_bat_icon_label` every 30s.
-- `app_main` returns after setup — FreeRTOS scheduler runs LVGL + button + battery tasks.
+- All event callbacks (button, WiFi, BLE, SNTP) are in `app_handlers.c`.
+- `app_main` returns after setup — FreeRTOS scheduler runs LVGL + event loops.
+
+### `src/app_handlers.c` / `src/app_handlers.h`
+- All event/button callbacks: `on_button_press()`, `on_sntp_sync()`, `on_ble_prov_event()`, `on_wifi_event()`.
+- Register callbacks at startup: `bsp_buttons_init(on_button_press)`, `wifi_manager_set_callback(on_wifi_event)`, `ble_provisioning_init(on_ble_prov_event)`.
+- **Critical**: All LVGL calls must be wrapped in `lvgl_port_lock(0)` / `lvgl_port_unlock()`.
 
 ### `components/bsp/` — Board Support Package
 Modular HAL for the T-Display-S3 (display, backlight, battery, buttons).
@@ -39,8 +44,11 @@ SNTP time synchronization (non-blocking task, periodic re-sync).
 📖 **[Full docs: `sntp_sync/README.md`](components/sntp_sync/README.md)** — usage and API.
 
 ### `components/wifi_manager/`
-Robust WiFi connection and scan manager (multi-round scanning, exponential backoff).
+Single-credential WiFi manager with BLE provisioning fallback. Fires `WIFI_MGR_NO_CRED` event on first boot (no stored credentials) → triggers BLE provisioning.
 📖 **[Full docs: `wifi_manager/README.md`](components/wifi_manager/README.md)** — state machine and API.
+
+### `components/ble_provisioning/`
+BLE provisioning via espressif/network_provisioning. Security 1 (ECDH + SHA-256), empty PoP, device name `PROV_ZenClock_XXYY`. Shows QR overlay on display. Called on first boot (no credentials) or IO14 double-click. After provisioning succeeds, calls `ble_provisioning_release_memory()` to free BLE RAM (cannot be re-allocated).
 
 ### `components/settings/`
 Persistent configuration manager via NVS (Non-Volatile Storage).
@@ -55,7 +63,10 @@ ui_init();
 lvgl_port_unlock();
 bsp_display_set_brightness(100, 2000);
 bsp_buttons_init(on_button_press);
-xTaskCreate(battery_update_task, "bat_mon", 4096, NULL, 2, NULL);
+wifi_manager_set_callback(on_wifi_event);
+ble_provisioning_init(on_ble_prov_event);
+wifi_manager_start();
+// Callbacks in app_handlers.c handle WiFi, BLE, button, SNTP events
 ```
 
 ## 4. Build & Flash
@@ -74,11 +85,12 @@ pio run -t menuconfig    # SDK configuration
 3. **No direct `lcd_backlight` access** — go through `bsp_display_set_brightness()`.
 4. **No `sdkconfig.defaults`** — use `menuconfig`; provide menu paths for config changes.
 5. **Never Quad PSRAM** — causes boot loop on this board.
-6. **LVGL calls** must be wrapped in `lvgl_port_lock(0)` / `lvgl_port_unlock()`.
+6. **LVGL calls from callbacks** — **ALWAYS** wrap in `lvgl_port_lock(0)` / `lvgl_port_unlock()` when called from WiFi, BLE, button, or SNTP event handlers.
 7. **Pin definitions** live in `include/board_config.h` only — never duplicate.
 8. **No panel/container objects** — `lv_obj_create(parent)` crashes; place labels directly on screen.
 9. **Theme init required** — call `lv_theme_default_init()` before creating widgets.
 10. **Re-align after text change** — call `lv_obj_align_to()` when label text changes width.
+11. **BLE memory cannot be re-allocated** — After `ble_provisioning_release_memory()` is called, BLE module memory is freed and cannot be re-initialized.
 
 ## 6. Pin Reference
 

@@ -2,11 +2,10 @@
 // ZenClock WiFi Manager — State-machine driven, persistent-task architecture
 //
 // Features:
-//   - 6-state machine: IDLE → SCANNING → CONNECTING → VERIFYING → CONNECTED
-//   - Infinite retry with exponential backoff (never gives up)
-//   - Reconnect: retry same SSID 3×, then full re-scan
+//   - 5-state machine: IDLE → SCANNING → CONNECTING → VERIFYING → CONNECTED
+//   - Single credential from NVS (namespace "wifi_cred")
+//   - No auto-retry on disconnect — fires DISCONNECTED event for BLE re-provisioning
 //   - DNS probe after Got IP to verify internet connectivity
-//   - Lightweight event handler (bits only, zero logic)
 
 #include "wifi_manager.h"
 #include "wifi_priv.h"
@@ -42,16 +41,17 @@ static SemaphoreHandle_t s_mutex = NULL;
 static TaskHandle_t s_task_handle = NULL;
 static wifi_event_cb_t s_callback = NULL;
 static wifi_state_t s_state = WIFI_ST_IDLE;
-static ssid_map_t s_cred_map;
-static int s_cred_count = 0;
 static esp_netif_t *s_sta_netif = NULL;
-static char s_connected_ssid[SSID_MAX_LEN] = {0};
-static int s_scan_attempt = 0;
 
-// Candidate list (shared between SCANNING and CONNECTING states)
+static char s_ssid[SSID_MAX_LEN] = {0};
+static char s_pass[PASS_MAX_LEN] = {0};
+static char s_connected_ssid[SSID_MAX_LEN] = {0};
+
+// Matched AP record — set in SCANNING, used in CONNECTING
+static wifi_ap_record_t s_match_ap;
+
+// AP list buffer — allocated once in wifi_task, reused across scans
 static wifi_ap_record_t *s_ap_list = NULL;
-static int s_candidates[WIFI_MAX_CREDENTIALS];
-static int s_candidate_count = 0;
 
 // ============================================================
 // State helpers (thread-safe)
@@ -59,8 +59,8 @@ static int s_candidate_count = 0;
 
 static const char *state_name(wifi_state_t st)
 {
-  static const char *names[] = {"IDLE", "SCANNING", "CONNECTING", "VERIFYING", "CONNECTED", "RECONNECTING"};
-  return (st <= WIFI_ST_RECONNECTING) ? names[st] : "?";
+  static const char *names[] = {"IDLE", "SCANNING", "CONNECTING", "VERIFYING", "CONNECTED"};
+  return (st <= WIFI_ST_CONNECTED) ? names[st] : "?";
 }
 
 static wifi_state_t get_state(void)
@@ -92,19 +92,6 @@ static void fire_event(wifi_manager_event_t event)
   {
     s_callback(event);
   }
-}
-
-// ============================================================
-// Backoff delay calculator
-// ============================================================
-static uint32_t calc_backoff_ms(int attempt, uint32_t base_ms, uint32_t max_ms)
-{
-  uint32_t delay = base_ms;
-  for (int i = 0; i < attempt && delay < max_ms; i++)
-  {
-    delay <<= 1;
-  }
-  return (delay < max_ms) ? delay : max_ms;
 }
 
 // ============================================================
@@ -206,7 +193,6 @@ static int do_aggregated_scan(wifi_ap_record_t *merged, int max_aps)
     if (!round_aps)
     {
       ESP_LOGW(TAG, "  Failed to allocate round buffer, skipping");
-      // Must still consume scan results to free internal ESP-IDF buffer
       esp_wifi_scan_get_ap_records(&ap_count, NULL);
       continue;
     }
@@ -251,7 +237,7 @@ static int do_aggregated_scan(wifi_ap_record_t *merged, int max_aps)
 }
 
 // ============================================================
-// Try connecting to a single candidate AP
+// Try connecting to a single AP with the stored password
 // Returns true if connected (got IP), false otherwise.
 // ============================================================
 static bool try_connect_candidate(const wifi_ap_record_t *ap, const char *password)
@@ -286,6 +272,11 @@ static bool try_connect_candidate(const wifi_ap_record_t *ap, const char *passwo
     ESP_LOGE(TAG, "set_config failed: %s", esp_err_to_name(ret));
     return false;
   }
+
+  // Disconnect any existing connection before attempting a new one.
+  // Required when network_prov_mgr leaves WiFi connected after credential verification.
+  esp_wifi_disconnect();
+  vTaskDelay(pdMS_TO_TICKS(300));
 
   xEventGroupClearBits(s_event_group, BIT_GOT_IP | BIT_FAIL | BIT_DISCONNECTED);
   esp_wifi_connect();
@@ -336,7 +327,7 @@ static bool do_dns_probe(void)
   }
 
   ESP_LOGW(TAG, "DNS probe timed out — assuming connected");
-  return true; // Fallback
+  return true; // Fallback: proceed even without confirmed internet
 }
 
 // ============================================================
@@ -346,28 +337,14 @@ static void wifi_task(void *arg)
 {
   // ── One-time setup ──
 
-  // Load credentials from NVS into hash map
-  s_cred_count = wifi_cred_store_load_all(&s_cred_map);
-  ESP_LOGI(TAG, "=== Stored WiFi credentials (%d) ===", s_cred_count);
-  for (int i = 0; i < SSID_MAP_CAPACITY; i++)
-  {
-    if (s_cred_map.buckets[i].occupied)
-    {
-      ESP_LOGI(TAG, "  SSID: \"%s\"  (pass: %s)", s_cred_map.buckets[i].ssid,
-               s_cred_map.buckets[i].password[0] ? "***" : "<open>");
-    }
-  }
-
   // Start WiFi driver
   xEventGroupClearBits(s_event_group, BIT_STA_START);
   esp_err_t ret = esp_wifi_start();
   if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "esp_wifi_start failed: %s — task waiting for restart", esp_err_to_name(ret));
+    ESP_LOGE(TAG, "esp_wifi_start failed: %s — task halted", esp_err_to_name(ret));
     for (;;)
-    {
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    }
   }
   xEventGroupWaitBits(s_event_group, BIT_STA_START, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000));
 
@@ -377,9 +354,7 @@ static void wifi_task(void *arg)
   {
     ESP_LOGE(TAG, "Failed to allocate AP buffer — task halted");
     for (;;)
-    {
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    }
   }
 
   // ── State machine loop ──
@@ -399,32 +374,30 @@ static void wifi_task(void *arg)
     // ────────────────────────────────────────────
     case WIFI_ST_IDLE:
     {
-      s_scan_attempt = 0;
       s_connected_ssid[0] = '\0';
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+      // Load single credential from NVS
+      if (!wifi_cred_load(s_ssid, sizeof(s_ssid), s_pass, sizeof(s_pass)))
+      {
+        ESP_LOGW(TAG, "No credential in NVS");
+        fire_event(WIFI_MGR_NO_CRED);
+        // Stay in IDLE — BLE provisioning will call wifi_manager_start() again
+        break;
+      }
+
+      ESP_LOGI(TAG, "Loaded credential: SSID=\"%s\"", s_ssid);
       set_state(WIFI_ST_SCANNING);
       break;
     }
 
     // ────────────────────────────────────────────
-    // SCANNING — aggregated scan, match credentials
+    // SCANNING — aggregated scan, match credential
     // ────────────────────────────────────────────
     case WIFI_ST_SCANNING:
     {
       fire_event(WIFI_MGR_SCANNING);
 
-      if (s_cred_count == 0)
-      {
-        ESP_LOGW(TAG, "No credentials stored");
-        fire_event(WIFI_MGR_NO_MATCH);
-        uint32_t delay = calc_backoff_ms(s_scan_attempt, SCAN_RETRY_BASE_MS, SCAN_RETRY_MAX_MS);
-        ESP_LOGW(TAG, "Retry in %" PRIu32 "ms (attempt %d)...", delay, s_scan_attempt + 1);
-        s_scan_attempt++;
-        vTaskDelay(pdMS_TO_TICKS(delay));
-        break;
-      }
-
-      // Multi-round aggregated scan
       memset(s_ap_list, 0, MAX_UNIQUE_APS * sizeof(wifi_ap_record_t));
       int ap_count = do_aggregated_scan(s_ap_list, MAX_UNIQUE_APS);
       ESP_LOGI(TAG, "Aggregated scan: %d unique APs after %d rounds", ap_count, SCAN_ROUNDS);
@@ -433,107 +406,53 @@ static void wifi_task(void *arg)
       if (ap_count == 0)
       {
         ESP_LOGW(TAG, "No APs found in scan");
-        uint32_t delay = calc_backoff_ms(s_scan_attempt, SCAN_RETRY_BASE_MS, SCAN_RETRY_MAX_MS);
-        ESP_LOGW(TAG, "Retry in %" PRIu32 "ms (attempt %d)...", delay, s_scan_attempt + 1);
-        s_scan_attempt++;
-        vTaskDelay(pdMS_TO_TICKS(delay));
+        fire_event(WIFI_MGR_NO_MATCH);
+        set_state(WIFI_ST_IDLE);
         break;
       }
 
-      // Log merged results
-      ESP_LOGI(TAG, "=== Merged WiFi networks (%d) ===", ap_count);
+      // Find AP matching stored SSID (list already sorted by RSSI descending)
+      int match_idx = -1;
       for (int i = 0; i < ap_count; i++)
       {
-        ESP_LOGI(TAG, "  [%2d] %-32s  RSSI:%d  CH:%d", i + 1, (const char *)s_ap_list[i].ssid, s_ap_list[i].rssi,
-                 s_ap_list[i].primary);
-      }
-
-      // Match against credential hash map — build candidate list
-      s_candidate_count = 0;
-      for (int i = 0; i < ap_count && s_candidate_count < WIFI_MAX_CREDENTIALS; i++)
-      {
-        const char *ssid = (const char *)s_ap_list[i].ssid;
-        if (ssid_map_contains(&s_cred_map, ssid))
+        if (strcmp((const char *)s_ap_list[i].ssid, s_ssid) == 0)
         {
-          bool dup = false;
-          for (int k = 0; k < s_candidate_count; k++)
-          {
-            if (strcmp((const char *)s_ap_list[s_candidates[k]].ssid, ssid) == 0)
-            {
-              dup = true;
-              break;
-            }
-          }
-          if (!dup)
-          {
-            ESP_LOGI(TAG, "  Match: \"%s\" (RSSI: %d)", ssid, s_ap_list[i].rssi);
-            s_candidates[s_candidate_count++] = i;
-          }
+          match_idx = i;
+          break;
         }
       }
 
-      if (s_candidate_count == 0)
+      if (match_idx < 0)
       {
-        ESP_LOGW(TAG, "No scan results matched stored credentials");
+        ESP_LOGW(TAG, "AP \"%s\" not found in scan", s_ssid);
         fire_event(WIFI_MGR_NO_MATCH);
-        uint32_t delay = calc_backoff_ms(s_scan_attempt, SCAN_RETRY_BASE_MS, SCAN_RETRY_MAX_MS);
-        ESP_LOGW(TAG, "Retry in %" PRIu32 "ms (attempt %d)...", delay, s_scan_attempt + 1);
-        s_scan_attempt++;
-        vTaskDelay(pdMS_TO_TICKS(delay));
+        set_state(WIFI_ST_IDLE);
         break;
       }
 
-      ESP_LOGI(TAG, "Found %d matching networks", s_candidate_count);
-      s_scan_attempt = 0; // Reset backoff on match found
+      ESP_LOGI(TAG, "Found \"%s\" (RSSI: %d, CH: %d)", s_ssid, s_ap_list[match_idx].rssi, s_ap_list[match_idx].primary);
+      s_match_ap = s_ap_list[match_idx];
       set_state(WIFI_ST_CONNECTING);
       break;
     }
 
     // ────────────────────────────────────────────
-    // CONNECTING — try each candidate sequentially
+    // CONNECTING — single attempt with stored pass
     // ────────────────────────────────────────────
     case WIFI_ST_CONNECTING:
     {
-      bool connected = false;
+      ESP_LOGI(TAG, "Connecting to \"%s\"...", s_ssid);
 
-      for (int c = 0; c < s_candidate_count; c++)
+      if (try_connect_candidate(&s_match_ap, s_pass))
       {
-        if (check_stop_signal())
-        {
-          goto loop_continue;
-        }
-
-        int idx = s_candidates[c];
-        const char *ssid = (const char *)s_ap_list[idx].ssid;
-        const char *pass = ssid_map_get(&s_cred_map, ssid);
-
-        ESP_LOGI(TAG, "Trying [%d/%d]: \"%s\"...", c + 1, s_candidate_count, ssid);
-
-        if (try_connect_candidate(&s_ap_list[idx], pass))
-        {
-          ESP_LOGI(TAG, "Connected to \"%s\"!", ssid);
-          connected = true;
-          break;
-        }
-        else
-        {
-          ESP_LOGW(TAG, "Failed to connect to \"%s\"", ssid);
-        }
-      }
-
-      if (connected)
-      {
+        ESP_LOGI(TAG, "Connected to \"%s\"!", s_ssid);
         set_state(WIFI_ST_VERIFYING);
       }
       else
       {
-        // All candidates failed — backoff and re-scan (infinite)
+        ESP_LOGW(TAG, "Failed to connect to \"%s\"", s_ssid);
         fire_event(WIFI_MGR_ALL_FAILED);
-        uint32_t delay = calc_backoff_ms(s_scan_attempt, SCAN_RETRY_BASE_MS, SCAN_RETRY_MAX_MS);
-        ESP_LOGW(TAG, "All candidates failed — retry in %" PRIu32 "ms (attempt %d)...", delay, s_scan_attempt + 1);
-        s_scan_attempt++;
-        vTaskDelay(pdMS_TO_TICKS(delay));
-        set_state(WIFI_ST_SCANNING);
+        set_state(WIFI_ST_IDLE);
       }
       break;
     }
@@ -543,27 +462,24 @@ static void wifi_task(void *arg)
     // ────────────────────────────────────────────
     case WIFI_ST_VERIFYING:
     {
-      do_dns_probe(); // Result logged inside; fallback always declares connected
+      do_dns_probe();
 
-      // Check if disconnected during probe
       EventBits_t bits = xEventGroupGetBits(s_event_group);
       if (bits & BIT_DISCONNECTED)
       {
         xEventGroupClearBits(s_event_group, BIT_DISCONNECTED);
         ESP_LOGW(TAG, "Disconnected during verification");
         fire_event(WIFI_MGR_DISCONNECTED);
-        set_state(WIFI_ST_RECONNECTING);
+        set_state(WIFI_ST_IDLE);
         break;
       }
       if (bits & BIT_STOP)
       {
-        break; // Will be caught by check_stop_signal at top of loop
+        break;
       }
 
-      // DNS probe done (success or fallback) — declare connected
       set_state(WIFI_ST_CONNECTED);
       fire_event(WIFI_MGR_CONNECTED);
-      s_scan_attempt = 0;
       break;
     }
 
@@ -572,7 +488,6 @@ static void wifi_task(void *arg)
     // ────────────────────────────────────────────
     case WIFI_ST_CONNECTED:
     {
-      // Block until something happens
       EventBits_t bits =
           xEventGroupWaitBits(s_event_group, BIT_DISCONNECTED | BIT_STOP, pdTRUE, pdFALSE, portMAX_DELAY);
 
@@ -584,64 +499,12 @@ static void wifi_task(void *arg)
       else if (bits & BIT_DISCONNECTED)
       {
         fire_event(WIFI_MGR_DISCONNECTED);
-        set_state(WIFI_ST_RECONNECTING);
-      }
-      break;
-    }
-
-    // ────────────────────────────────────────────
-    // RECONNECTING — retry same SSID 3×, then re-scan
-    // ────────────────────────────────────────────
-    case WIFI_ST_RECONNECTING:
-    {
-      fire_event(WIFI_MGR_RECONNECTING);
-      bool reconnected = false;
-
-      for (int r = 0; r < RECONNECT_SAME_SSID_MAX; r++)
-      {
-        if (check_stop_signal())
-        {
-          goto loop_continue;
-        }
-
-        uint32_t delay =
-            calc_backoff_ms(r, RECONNECT_BASE_DELAY_MS, RECONNECT_BASE_DELAY_MS << RECONNECT_SAME_SSID_MAX);
-        ESP_LOGI(TAG, "Reconnect retry %d/%d \"%s\" (backoff: %" PRIu32 "ms)...", r + 1, RECONNECT_SAME_SSID_MAX,
-                 s_connected_ssid, delay);
-
-        xEventGroupClearBits(s_event_group, BIT_GOT_IP | BIT_DISCONNECTED);
-        esp_wifi_connect();
-
-        EventBits_t bits = xEventGroupWaitBits(s_event_group, BIT_GOT_IP | BIT_DISCONNECTED, pdTRUE, pdFALSE,
-                                               pdMS_TO_TICKS(CONNECT_TIMEOUT_MS));
-
-        if (bits & BIT_GOT_IP)
-        {
-          ESP_LOGI(TAG, "Reconnected to \"%s\"!", s_connected_ssid);
-          reconnected = true;
-          break;
-        }
-
-        // Wait before next retry
-        vTaskDelay(pdMS_TO_TICKS(delay));
-      }
-
-      if (reconnected)
-      {
-        set_state(WIFI_ST_VERIFYING);
-      }
-      else
-      {
-        ESP_LOGW(TAG, "Reconnect exhausted — falling back to full scan");
-        s_scan_attempt = 0;
-        set_state(WIFI_ST_SCANNING);
+        set_state(WIFI_ST_IDLE); // No auto-retry — BLE provisioning handles reconnect
       }
       break;
     }
 
     } // switch
-
-  loop_continue:;
   } // for(;;)
 }
 
@@ -652,12 +515,6 @@ static void wifi_task(void *arg)
 esp_err_t wifi_manager_init(void)
 {
   ESP_LOGI(TAG, "Initializing WiFi manager...");
-
-  // NVS (must be first)
-  ESP_ERROR_CHECK(wifi_cred_store_init());
-
-  // Provision compiled credentials
-  wifi_cred_store_provision();
 
   // Network interface
   ESP_ERROR_CHECK(esp_netif_init());
@@ -734,14 +591,4 @@ wifi_state_t wifi_manager_get_state(void)
 const char *wifi_manager_get_ssid(void)
 {
   return s_connected_ssid[0] ? s_connected_ssid : NULL;
-}
-
-esp_err_t wifi_cred_add(const char *ssid, const char *password)
-{
-  return wifi_cred_store_add(ssid, password);
-}
-
-esp_err_t wifi_cred_remove(const char *ssid)
-{
-  return wifi_cred_store_remove(ssid);
 }

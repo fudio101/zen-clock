@@ -1,102 +1,280 @@
 # WiFi Manager
 
-> **[AI Context]** This component handles WiFi connectivity with multi-credential support.
-> State-machine driven, persistent-task architecture with infinite retry.
-> Credentials are provisioned from a CSV file at build time, stored in NVS,
-> and matched against scanned networks using a DJB2 hash map for O(1) lookup.
+A lightweight, state-machine-based WiFi connection manager for ESP32-S3, designed for ZenClock.
+
+## Overview
+
+WiFi Manager handles the complete WiFi lifecycle:
+1. Load stored credentials from NVS
+2. Scan for matching networks
+3. Connect and obtain IP
+4. Verify internet connectivity via DNS probe
+5. Report connection state via callback events
+
+The component uses a persistent FreeRTOS task to manage state transitions and integrates with the rest of the system via event callbacks.
 
 ## Architecture
 
+### State Machine
+
+The WiFi Manager operates with five states (no RECONNECTING state):
+
+```
+IDLE ──start()──► SCANNING ──match──► CONNECTING ──got IP──► VERIFYING ──DNS OK──► CONNECTED
+  ▲                  │                     │                      │                    │
+  │                  │ no match            │ fail                 │ disconnect         │ disconnect
+  └──────────────────┴─────────────────────┴──────────────────────┴────────────────────┘
+```
+
+**State transitions:**
+
+- **IDLE** → **SCANNING**: `wifi_manager_start()` called with credentials loaded
+- **SCANNING** → **CONNECTING**: Stored SSID found in scan results
+- **CONNECTING** → **VERIFYING**: Got IP address (DHCP)
+- **VERIFYING** → **CONNECTED**: DNS probe to `pool.ntp.org` succeeds
+- Any state → **IDLE**: Disconnect event or `wifi_manager_stop()` called
+- Any state → **IDLE** with event: Failure condition (no match, connection failed, etc.)
+
+**Key characteristics:**
+
+- No explicit RECONNECTING state — on disconnect, WiFi Manager returns to IDLE and fires an event
+- Caller (`main.c`) decides whether to retry or start BLE provisioning
+- VERIFYING includes a DNS probe to verify internet connectivity, not just local network access
+- Persistent task created once in `wifi_manager_init()`, never destroyed
+
+### Credential Storage
+
+Credentials are stored in NVS under namespace `"wifi_cred"`:
+
+| Key | Value |
+|-----|-------|
+| `"ssid"` | Network SSID (max 32 bytes) |
+| `"pass"` | Network password (max 64 bytes) |
+
+**Important:**
+- **Single credential only** — no multi-credential support or hash map
+- NVS must be initialized before `wifi_manager_init()` (typically via `settings_init()`)
+- Empty credentials → IDLE state fires `WIFI_MGR_NO_CRED` event immediately
+- Caller manages credential lifecycle via `wifi_manager_set_credential()` and `wifi_manager_clear_credential()`
+
+### Files
+
 ```
 wifi_manager/
-├── include/wifi_manager.h     ← Public API (the ONLY header consumers include)
-├── priv_include/wifi_priv.h   ← Internal: hash table + NVS store + constants
+├── include/
+│   └── wifi_manager.h            ← Public API (all functions here)
+├── priv_include/
+│   └── wifi_priv.h               ← Internal constants, wifi_cred_load()
 ├── src/
-│   ├── wifi_manager.c         ← Core: state machine, persistent task, DNS probe
-│   ├── wifi_cred_store.c      ← NVS credential CRUD + provisioning from compiled array
-│   └── wifi_ssid_map.c        ← DJB2 hash table for O(1) SSID → password lookup
+│   ├── wifi_manager.c            ← State machine, persistent task, DNS probe
+│   └── wifi_credentials.c        ← NVS credential read/write/delete
 └── CMakeLists.txt
 ```
 
-## State Machine
+**File responsibilities:**
 
-```
-IDLE ──start()──→ SCANNING ──match──→ CONNECTING ──got IP──→ VERIFYING ──DNS OK──→ CONNECTED
-                     ↑  ↑                 │                      │                    │
-                     │  │    all failed    │         disconnected │       disconnect   │
-                     │  └─────────────────┘←─────────────────────┘                    │
-                     │                                                                │
-                     │                    RECONNECTING ←───────────────────────────────┘
-                     │                    ├─ retry ×3 (same SSID, 2s/4s/8s backoff)
-                     └────────────────────┤
-                                          └─ 3× failed → full re-scan
-```
-
-- **Infinite retry**: SCANNING never gives up. Backoff: 2s → 4s → 8s → 16s → 30s (cap).
-- **VERIFYING**: DNS probe (`getaddrinfo`) after Got IP — confirms internet works
-  before declaring CONNECTED. Avoids premature SNTP/API calls.
-- **Reconnect**: Lost WiFi → retry same SSID 3×, then full re-scan.
-- **Only `wifi_manager_stop()` returns to IDLE.**
-
-## Credential Flow
-
-```
-wifi_config.csv (user-edited, gitignored)
-        │
-        ▼  scripts/gen_wifi_creds.py (PlatformIO pre-build)
-include/wifi_credentials.gen.h (auto-generated, gitignored)
-        │
-        ▼  Compiled into firmware
-wifi_cred_store_provision()
-        │
-        ├── Compare WIFI_CRED_HASH with NVS stored hash
-        ├── If different → re-provision NVS
-        └── If same → skip (already provisioned)
-```
+- `wifi_manager.h` — All public API functions and event enums
+- `wifi_priv.h` — Internal task handle, state enum, `wifi_cred_load()` function
+- `wifi_manager.c` — Event loop, state machine, WiFi driver integration, persistent task
+- `wifi_credentials.c` — NVS read/write operations for SSID/pass
 
 ## Public API
 
-| Function | Description |
-|---|---|
-| `wifi_manager_init()` | Init NVS, netif, WiFi driver, create persistent task |
-| `wifi_manager_start()` | Wake task → scan → match → connect (infinite retry) |
-| `wifi_manager_is_connected()` | True only when state == CONNECTED |
-| `wifi_manager_stop()` | Stop WiFi, return task to IDLE |
-| `wifi_manager_set_callback(cb)` | Set event callback |
-| `wifi_manager_get_state()` | Get current state machine state |
-| `wifi_manager_get_ssid()` | Get connected SSID (or NULL) |
-| `wifi_cred_add(ssid, pass)` | Add credential to NVS at runtime |
-| `wifi_cred_remove(ssid)` | Remove credential from NVS |
+### Initialization & Lifecycle
+
+```c
+/**
+ * @brief Initialize WiFi Manager.
+ * Creates netif, initializes WiFi driver, creates persistent task.
+ * Call once at startup.
+ */
+void wifi_manager_init(void);
+
+/**
+ * @brief Start WiFi connection process.
+ * Loads credentials → scans → connects → verifies (blocks task, not caller).
+ * Returns immediately; use callback for state updates.
+ */
+void wifi_manager_start(void);
+
+/**
+ * @brief Stop WiFi and return task to IDLE.
+ * Disconnects immediately; fires WIFI_MGR_DISCONNECTED event.
+ */
+void wifi_manager_stop(void);
+```
+
+### State & Status Queries
+
+```c
+/**
+ * @brief Get current WiFi Manager state.
+ * @return wifi_mgr_state_t — current state (IDLE, SCANNING, CONNECTING, etc.)
+ */
+wifi_mgr_state_t wifi_manager_get_state(void);
+
+/**
+ * @brief Check if WiFi is fully connected and internet verified.
+ * @return true only when state == CONNECTED
+ */
+bool wifi_manager_is_connected(void);
+
+/**
+ * @brief Get connected SSID.
+ * @return Pointer to SSID string, or empty string if not connected.
+ */
+const char *wifi_manager_get_ssid(void);
+```
+
+### Credential Management
+
+```c
+/**
+ * @brief Check if credentials are stored in NVS.
+ * @return true if SSID/pass exist in NVS namespace "wifi_cred"
+ */
+bool wifi_manager_has_credential(void);
+
+/**
+ * @brief Save SSID and password to NVS.
+ * Called by BLE provisioning callback after user enters WiFi details.
+ * @param ssid Network SSID (max 32 bytes)
+ * @param pass Network password (max 64 bytes)
+ */
+void wifi_manager_set_credential(const char *ssid, const char *pass);
+
+/**
+ * @brief Clear stored credentials from NVS.
+ * Called by IO14 double-click handler or provisioning timeout.
+ */
+void wifi_manager_clear_credential(void);
+```
+
+### Event Callback
+
+```c
+/**
+ * @brief Set callback function for WiFi Manager events.
+ * Callback fires from background task when state changes.
+ * Always wrap UI updates with lvgl_port_lock() / lvgl_port_unlock().
+ * @param callback Function pointer, or NULL to disable
+ */
+void wifi_manager_set_callback(wifi_mgr_callback_t callback);
+
+typedef void (*wifi_mgr_callback_t)(wifi_mgr_event_t event);
+```
 
 ## Events
 
-| Event | When |
-|---|---|
-| `WIFI_MGR_CONNECTING` | Trying a candidate network |
-| `WIFI_MGR_GOT_IP` | Got IP, verifying internet (DNS probe) |
-| `WIFI_MGR_CONNECTED` | Verified online (DNS probe OK) |
-| `WIFI_MGR_DISCONNECTED` | Lost connection |
-| `WIFI_MGR_RECONNECTING` | Retrying same SSID before re-scan |
-| `WIFI_MGR_SCAN_DONE` | WiFi scan complete |
-| `WIFI_MGR_NO_MATCH` | No scan result matched stored credentials |
-| `WIFI_MGR_ALL_FAILED` | One scan cycle failed — retrying (informational) |
+WiFi Manager fires events via the callback when state changes:
 
-## States
+| Event | When | Expected Action |
+|-------|------|---|
+| `WIFI_MGR_SCANNING` | Scan started | Update UI: show "Scanning..." |
+| `WIFI_MGR_CONNECTING` | Attempting to connect to matched SSID | Update UI: show "Connecting to [SSID]..." |
+| `WIFI_MGR_GOT_IP` | Got IP address via DHCP | (Internal: DNS probe in progress) |
+| `WIFI_MGR_CONNECTED` | DNS probe successful, internet verified | Update UI: show WiFi icon, enable time display |
+| `WIFI_MGR_DISCONNECTED` | Lost WiFi connection | Update UI: show disconnected state |
+| `WIFI_MGR_NO_CRED` | No credentials stored in NVS at start | Call `ble_provisioning_start()` to enter setup mode |
+| `WIFI_MGR_NO_MATCH` | Stored SSID not found in scan results | Call `wifi_manager_stop()`, then `ble_provisioning_start()` |
+| `WIFI_MGR_ALL_FAILED` | Connection attempt failed (bad password, timeout, etc.) | Call `wifi_manager_stop()`, then `ble_provisioning_start()` |
+| `WIFI_MGR_SCAN_DONE` | Scan complete (informational) | (Generally not used in UI) |
 
-| State | Description |
-|---|---|
-| `WIFI_ST_IDLE` | Initialized, waiting for `start()` |
-| `WIFI_ST_SCANNING` | Running aggregated scan + credential matching |
-| `WIFI_ST_CONNECTING` | Trying candidate APs sequentially |
-| `WIFI_ST_VERIFYING` | Got IP, running DNS probe |
-| `WIFI_ST_CONNECTED` | Online and operational |
-| `WIFI_ST_RECONNECTING` | Lost connection, retrying same SSID |
+## Integration & Rules
 
-## Rules for AI Agents
+### Caller Responsibilities
 
-1. **Never call `esp_wifi_*` directly** from main.c — use this API.
-2. **Credentials** are managed via `wifi_config.csv` (pre-build) or `wifi_cred_add()` (runtime).
-3. **Event callback** fires from background task context — use `lvgl_port_lock()` before UI updates.
-4. **`wifi_priv.h`** is internal — do not include from outside this component.
-5. **Task is persistent** — created once in `init()`, never deleted. Use `start()`/`stop()` to control.
-6. **CONNECTED means verified** — DNS probe passed, internet is working.
+1. **Call in correct order:**
+   ```c
+   wifi_manager_init();        // Once at startup
+   wifi_manager_set_callback(on_wifi_event);  // Set callback
+   wifi_manager_start();       // Start connection process
+   ```
+
+2. **Handle failure events:**
+   - On `WIFI_MGR_NO_CRED`, `WIFI_MGR_NO_MATCH`, `WIFI_MGR_ALL_FAILED`, `WIFI_MGR_DISCONNECTED`
+   - Call `wifi_manager_stop()` to disconnect WiFi cleanly
+   - Then call `ble_provisioning_start()` to enter provisioning mode
+
+3. **Lock UI updates in callback:**
+   ```c
+   static void on_wifi_event(wifi_mgr_event_t event) {
+       lvgl_port_lock(0);
+       // ... update UI widgets ...
+       lvgl_port_unlock();
+   }
+   ```
+
+4. **Never call `esp_wifi_*` directly** — use this API only
+
+### WiFi Initialization Dependencies
+
+WiFi Manager depends on:
+- **NVS** (initialized by `settings_init()` before `wifi_manager_init()`)
+- **network interface** (created in `wifi_manager_init()`)
+- **event loop** (from IDF, used internally for WiFi events)
+
+### Network Provisioning Integration
+
+When WiFi needs credentials (no match, connection failed, user reset):
+
+1. Caller receives failure event in callback
+2. Caller calls `wifi_manager_stop()` to disconnect WiFi
+3. Caller calls `ble_provisioning_start()` to enter BLE setup mode
+4. BLE provisioning listens for user input, calls `wifi_manager_set_credential()` when ready
+5. Caller receives `WIFI_MGR_SET_CREDENTIAL` callback or similar, then calls `wifi_manager_start()` again
+
+**Critical:** Stop WiFi before starting BLE provisioning to avoid driver conflicts.
+
+### DNS Probe (Internet Verification)
+
+After obtaining an IP address, WiFi Manager sends a DNS query to `pool.ntp.org` to verify internet connectivity. This distinguishes:
+- **Local WiFi only** (no internet, e.g., captive portal) — VERIFYING state, no CONNECTED event
+- **Full internet access** — CONNECTED event fires
+
+This is important for NTP synchronization and ensures the device is truly online.
+
+## Configuration
+
+WiFi Manager uses hardcoded timeouts (see `wifi_priv.h`):
+
+| Timeout | Value | Purpose |
+|---------|-------|---------|
+| Scan timeout | 10 seconds | WiFi scan duration |
+| Connection timeout | 15 seconds | Time to get IP address |
+| DNS probe timeout | 5 seconds | Internet verification |
+
+To adjust, edit `wifi_priv.h` and rebuild.
+
+## Constraints & Anti-Patterns
+
+**DO:**
+- Call `wifi_manager_init()` once at startup
+- Set callback before calling `wifi_manager_start()`
+- Lock LVGL in callback before updating UI
+- Call `wifi_manager_stop()` before `ble_provisioning_start()`
+- Handle all failure events (NO_CRED, NO_MATCH, ALL_FAILED, DISCONNECTED)
+
+**DO NOT:**
+- Include `wifi_priv.h` outside this component
+- Call `esp_wifi_*` functions directly
+- Update UI without `lvgl_port_lock()` in callback
+- Call blocking operations in callback (blocks task)
+- Assume WiFi stays connected indefinitely (listen for DISCONNECTED event)
+
+## Testing
+
+WiFi Manager is designed for real hardware (ESP32-S3) and WiFi networks. Test scenarios:
+
+1. **First boot, no credentials** → IDLE fires NO_CRED → BLE provisioning
+2. **Credentials set, network found** → SCANNING → CONNECTING → VERIFYING → CONNECTED
+3. **Credentials set, network not found** → SCANNING → NO_MATCH → caller starts provisioning
+4. **Connection fails (bad password)** → CONNECTING fails → ALL_FAILED → caller starts provisioning
+5. **WiFi disconnected** → CONNECTED → DISCONNECTED → caller decides (retry or provision)
+
+## Related Components
+
+- **ble_provisioning** — Sets credentials via `wifi_manager_set_credential()`
+- **sntp_sync** — Runs after WiFi CONNECTED event to sync time
+- **ui** — Updates status bar in WiFi event callback
+- **settings** — Initializes NVS before `wifi_manager_init()`

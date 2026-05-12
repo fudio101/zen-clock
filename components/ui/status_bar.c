@@ -174,6 +174,12 @@ void status_bar_set_wifi_status(wifi_status_t status)
     lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_wifi_icon, lv_palette_main(LV_PALETTE_GREEN), 0);
     break;
+
+  case WIFI_STATUS_PROVISIONING:
+    lv_label_set_text(s_wifi_icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_opa(s_wifi_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_wifi_icon, lv_palette_main(LV_PALETTE_CYAN), 0);
+    break;
   }
 
   // Re-align entire chain after icon change
