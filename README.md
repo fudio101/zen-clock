@@ -105,9 +105,9 @@ pio device monitor
 
 1. Display shows ZenClock UI with smooth 2-second backlight fade-in
 2. WiFi manager fires `WIFI_MGR_NO_CRED` event → triggers BLE provisioning
-3. BLE provisioning QR code overlay appears on display
-4. Use the [Espressif BLE Provisioning app](https://github.com/espressif/esp-idf/tree/master/tools/esp_prov) to scan QR
-   and provision WiFi
+3. BLE provisioning QR code overlay appears — shows QR code and 8-character password (e.g. `D917D7DE`)
+4. Use the [Espressif BLE Provisioning app](https://github.com/espressif/esp-idf/tree/master/tools/esp_prov) (iOS/Android),
+   scan the QR code, enter the displayed password when prompted (Security 2 / SRP6a), then select your WiFi network
 5. Once connected, provisioning screen closes and clock displays time (synced via SNTP)
 
 **Button Controls:**

@@ -1,0 +1,195 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Build & Flash Commands
+
+```bash
+# Build
+pio run
+
+# Flash to device
+pio run -t upload
+
+# Monitor serial output (115200 baud)
+pio device monitor
+
+# Build + flash + monitor in one step
+pio run -t upload && pio device monitor
+
+# Format all C/C++ files
+./format.sh        # Linux/macOS
+format.bat         # Windows
+```
+
+## Project Overview
+
+ZenClock is ESP-IDF 6.0+ firmware for the **LilyGo T-Display-S3** (ESP32-S3, 320×170 ST7789 LCD via Intel 8080 bus).
+Built with PlatformIO. The main board config is `sdkconfig.lilygo-t-display-s3`.
+
+## Architecture
+
+### Boot Sequence (`src/main.c`)
+
+`main.c` is a pure boot orchestrator — no business logic:
+
+```
+bsp_display_init → settings_init → ui_init(is_light)  [calls nav_init() internally]
+→ bsp_display_set_brightness(brightness_from_nvs, 2000ms)
+→ bsp_buttons_init → wifi_manager_init → ble_provisioning_init
+→ app_handlers_register_nav_callbacks() → wifi_manager_start
+```
+
+On first boot (no NVS credentials), `wifi_manager_start()` fires `WIFI_MGR_NO_CRED`, which triggers
+`ble_provisioning_start()`.
+
+### Event Callbacks (`src/app_handlers.c`)
+
+All event callbacks and nav wiring live here:
+
+| Symbol                                  | Role                                                                                 |
+|-----------------------------------------|--------------------------------------------------------------------------------------|
+| `on_button_press`                       | Maps BSP button events → `nav_handle_action()`; handles emergency IO14 hold directly |
+| `on_wifi_event`                         | WiFi manager state machine transitions                                               |
+| `on_ble_prov_event`                     | BLE provisioning lifecycle events                                                    |
+| `on_sntp_sync`                          | NTP sync status updates                                                              |
+| `app_handlers_register_nav_callbacks()` | Wires `do_reset_wifi` into nav system — called once at boot                          |
+
+`on_wifi_event` falls back to `ble_provisioning_start()` on `NO_CRED`, `NO_MATCH`, `ALL_FAILED`, and `DISCONNECTED`.
+
+### Components
+
+| Component                      | Purpose                                                                          |
+|--------------------------------|----------------------------------------------------------------------------------|
+| `components/bsp/`              | Board Support: display init, battery (GPIO4/ADC1_CH3), backlight (LEDC), buttons |
+| `components/ui/`               | LVGL UI — modular widgets, see below                                             |
+| `components/wifi_manager/`     | WiFi state machine: IDLE → SCANNING → CONNECTING → VERIFYING → CONNECTED         |
+| `components/ble_provisioning/` | BLE WiFi provisioning via `espressif/network_provisioning`                       |
+| `components/settings/`         | NVS-backed settings: light/dark theme + brightness (0–100)                       |
+| `components/sntp_sync/`        | NTP time synchronization with callback                                           |
+| `components/lcd_backlight/`    | LCD backlight driver via LEDC PWM                                                |
+
+### UI Component (`components/ui/`)
+
+Public API: `ui_init(bool is_light)` and `ui_set_theme(bool is_light)`. Callers have zero knowledge of screens or
+widgets.
+
+`ui_init()` only sets the LVGL theme, then calls `nav_init()` which creates and loads the initial clock screen.
+
+| Source              | Role                                                                                 |
+|---------------------|--------------------------------------------------------------------------------------|
+| `ui.c`              | Theme init + delegates to `nav_init()`                                               |
+| `nav.c`             | **Navigation state machine** — owns all screen transitions (Clock ↔ Menu ↔ Settings) |
+| `clock_face_text.c` | HH:MM:SS (Montserrat 48) + DD/MM/YYYY (Montserrat 14), internal 1s LVGL timer        |
+| `status_bar.c`      | WiFi/NTP/battery icons, internal 30s LVGL timer, reads BSP directly                  |
+| `prov_screen.c`     | QR code overlay shown during BLE provisioning                                        |
+| `menu_screen.c`     | Menu list screen                                                                     |
+| `settings_screen.c` | Settings list with inline edit (Theme, Brightness, Reset WiFi)                       |
+
+**Navigation flow:**
+
+```
+Clock → (any long press) → Menu → (BOOT long) → Settings
+Settings: UP/DOWN navigate, BOOT long = enter edit, IO14 long = back
+Edit mode: UP/DOWN change value (auto-saved to NVS), any long press exits
+```
+
+**Nav public API** (`nav.h`):
+
+```c
+void nav_init(void);                                  // creates + loads clock screen
+void nav_handle_action(nav_action_t action);          // called by on_button_press
+void nav_register_reset_wifi_cb(nav_action_cb_t cb);  // called by app_handlers_register_nav_callbacks
+```
+
+**Nav actions** map to buttons:
+| Action | Button |
+|--------|--------|
+| `NAV_ACTION_UP` | BOOT short press |
+| `NAV_ACTION_SELECT` | BOOT long press |
+| `NAV_ACTION_DOWN` | IO14 short press |
+| `NAV_ACTION_BACK` | IO14 long press |
+
+Clock face is swappable: replace `clock_face_text.c` with another implementation in `components/ui/CMakeLists.txt`.
+
+### Button Actions
+
+| Button        | Single Click    | Double Click (500ms window)                                               |
+|---------------|-----------------|---------------------------------------------------------------------------|
+| BOOT (GPIO0)  | Brightness +10% | Toggle Light/Dark theme                                                   |
+| IO14 (GPIO14) | Brightness −10% | Clear WiFi creds → BLE provisioning (or `esp_restart()` if BLE RAM freed) |
+
+### WiFi Manager API
+
+Single-credential NVS model (namespace `wifi_cred`, keys `ssid`/`pass`):
+
+```c
+wifi_manager_set_credential(ssid, pass)
+wifi_manager_clear_credential()
+wifi_manager_has_credential()
+```
+
+## Critical Rules
+
+### UI Updates
+
+**Always use LVGL timers** for UI updates — never FreeRTOS tasks with `lvgl_port_lock/unlock`. FreeRTOS task updates
+cause rendering artifacts on the Intel 8080 bus.
+
+When touching LVGL from an event callback, acquire the lock:
+
+```c
+lvgl_port_lock(0);
+// LVGL calls here
+lvgl_port_unlock();
+```
+
+**Never hardcode colors** (e.g., `lv_color_white()`). The UI supports Light and Dark themes — use theme-aware color
+access.
+
+### BLE Provisioning Gotchas
+
+1. **`ble_provisioning_release_memory()` is one-way.** Frees ~110 KB BLE RAM. Subsequent `ble_provisioning_start()`
+   returns `ESP_ERR_INVALID_STATE`. Requires `esp_restart()` to re-provision.
+
+2. **Wrong-password retry:** On `BLE_PROV_FAILED`, do NOT stop/restart the BLE manager. Clear the NVS credential and
+   re-show the QR overlay so the phone retries over the existing BLE connection.
+
+3. **Post-provisioning WiFi:** After `BLE_PROV_SUCCESS`, `network_prov_mgr` leaves WiFi connected.
+   `wifi_manager.c::try_connect_candidate()` must call `esp_wifi_disconnect()` + `vTaskDelay(300ms)` before
+   reconnecting, otherwise `ASSOC_LEAVE` triggers a 15-second timeout → `WIFI_MGR_ALL_FAILED`.
+
+4. **Security level:** Uses Security 2 (SRP6a). Password = last 4 bytes of WiFi MAC as 8 hex chars (e.g. `D917D7DC`),
+   generated fresh each `ble_provisioning_start()` call via `esp_srp_gen_salt_verifier()`. Username is fixed to
+   `"wifiprov"` — the Espressif BLE Prov app hardcodes this value regardless of the QR code `username` field.
+   Salt+verifier are heap-allocated and freed on `NETWORK_PROV_END`.
+
+5. **BLE device name:** `PROV_ZenClock_XXYY` where XXYY = last 2 bytes of MAC address.
+
+### Required sdkconfig Keys
+
+If BLE provisioning breaks, verify these six keys in `sdkconfig.lilygo-t-display-s3`:
+
+```
+CONFIG_BT_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=y
+CONFIG_BT_BLE_ENABLED=y
+CONFIG_BT_BLE_42_FEATURES_SUPPORTED=y        # ESP32-S3 defaults BLE 5.0; legacy GAP needs this
+CONFIG_ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_2=y  # Kconfig-guarded, required for SRP6a
+CONFIG_LV_USE_QRCODE=y                        # LVGL QR widget, off by default
+```
+
+## Timezone
+
+Set as `setenv("TZ", "UTC-7", 1)` in `app_main` — POSIX sign-inversion convention for UTC+7.
+
+## Dependencies
+
+Managed components (in `managed_components/`):
+
+- `espressif__esp_lvgl_port` — LVGL port for ESP-IDF
+- `espressif__network_provisioning` ^1.2.4 — BLE provisioning manager
+- `espressif__cjson` — JSON (used by provisioning QR)
+- `lvgl__lvgl` — LVGL graphics library
+
+Declared in `src/idf_component.yml`.

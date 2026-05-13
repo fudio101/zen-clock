@@ -2,10 +2,10 @@
 // ZenClock — BLE Provisioning overlay screen
 //
 // Layout (320×170 landscape):
-//   [QR 140×140, left, y-centered] | [Title / instructions / device name, right]
+//   [QR 140×140, left, y-centered] | [Title / password / device name, right]
 //
-// QR payload format (Espressif BLE Prov app):
-//   {"ver":"v1","name":"<device>","pop":"","transport":"ble"}
+// QR payload format (Espressif BLE Prov app, Security 2):
+//   {"ver":"v1","name":"<device>","username":"ZenClock","pop":"<password>","transport":"ble"}
 
 #include "prov_screen.h"
 #include "lvgl.h"
@@ -19,9 +19,9 @@
 #define TEXT_X_START (QR_X_PAD + QR_SIZE + TEXT_X_PAD)
 #define TEXT_WIDTH (320 - TEXT_X_START - 8)
 
-static lv_obj_t *s_overlay = NULL;
+static lv_obj_t *s_overlay = nullptr;
 
-void prov_screen_show(const char *device_name)
+void prov_screen_show(const char *device_name, const char *password)
 {
   if (s_overlay)
   {
@@ -39,10 +39,11 @@ void prov_screen_show(const char *device_name)
   lv_obj_set_style_radius(s_overlay, 0, 0);
   lv_obj_clear_flag(s_overlay, LV_OBJ_FLAG_SCROLLABLE);
 
-  // Build QR payload (Espressif BLE Prov app format)
-  char payload[128];
-  snprintf(payload, sizeof(payload), "{\"ver\":\"v1\",\"name\":\"%s\",\"pop\":\"\",\"transport\":\"ble\"}",
-           device_name ? device_name : "");
+  // Build QR payload — Security 2 format includes username + password
+  char payload[160];
+  snprintf(payload, sizeof(payload),
+           "{\"ver\":\"v1\",\"name\":\"%s\",\"username\":\"wifiprov\",\"pop\":\"%s\",\"transport\":\"ble\"}",
+           device_name ? device_name : "", password ? password : "");
 
   // QR code — dark=black on white for maximum contrast
   lv_obj_t *qr = lv_qrcode_create(s_overlay);
@@ -58,7 +59,7 @@ void prov_screen_show(const char *device_name)
   lv_obj_set_style_text_color(title, lv_color_white(), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
   lv_label_set_text(title, "WiFi Setup");
-  lv_obj_set_pos(title, TEXT_X_START, 18);
+  lv_obj_set_pos(title, TEXT_X_START, 10);
 
   // Instructions
   lv_obj_t *instr = lv_label_create(s_overlay);
@@ -67,14 +68,30 @@ void prov_screen_show(const char *device_name)
   lv_label_set_long_mode(instr, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(instr, TEXT_WIDTH);
   lv_label_set_text(instr, "Scan QR with\nEspressif BLE Prov\n(iOS / Android)");
-  lv_obj_set_pos(instr, TEXT_X_START, 42);
+  lv_obj_set_pos(instr, TEXT_X_START, 34);
 
-  // Device name (bottom right — fallback for manual entry in app)
+  // Password label
+  lv_obj_t *pass_lbl = lv_label_create(s_overlay);
+  lv_obj_set_style_text_color(pass_lbl, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+  lv_obj_set_style_text_font(pass_lbl, &lv_font_montserrat_12, 0);
+  lv_label_set_text(pass_lbl, "Password:");
+  lv_obj_set_pos(pass_lbl, TEXT_X_START, 100);
+
+  // Password value — shown prominently so user can type it in the app
+  char pass_buf[16];
+  snprintf(pass_buf, sizeof(pass_buf), "%s", password ? password : "");
+  lv_obj_t *pass_val = lv_label_create(s_overlay);
+  lv_obj_set_style_text_color(pass_val, lv_color_white(), 0);
+  lv_obj_set_style_text_font(pass_val, &lv_font_montserrat_14, 0);
+  lv_label_set_text(pass_val, pass_buf);
+  lv_obj_set_pos(pass_val, TEXT_X_START, 116);
+
+  // Device name (bottom — fallback for manual entry in app)
   lv_obj_t *devlabel = lv_label_create(s_overlay);
   lv_obj_set_style_text_color(devlabel, lv_palette_main(LV_PALETTE_GREY), 0);
   lv_obj_set_style_text_font(devlabel, &lv_font_montserrat_12, 0);
   lv_label_set_text(devlabel, device_name ? device_name : "");
-  lv_obj_set_pos(devlabel, TEXT_X_START, 130);
+  lv_obj_set_pos(devlabel, TEXT_X_START, 148);
 }
 
 void prov_screen_hide(void)

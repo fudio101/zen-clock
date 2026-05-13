@@ -9,7 +9,6 @@ extern "C"
 #endif
 
 #include "esp_err.h"
-#include <stdbool.h>
 
   // ============================================================
   // Events fired via callback
@@ -58,6 +57,12 @@ extern "C"
    *        Safe to call any time after ble_provisioning_init().
    */
   void ble_provisioning_get_device_name(char *buf, size_t len);
+
+  /**
+   * @brief Get the SRP6a password derived from MAC (8 hex chars, e.g. "A1B2C3D4").
+   *        Valid after ble_provisioning_start(). Used to display on provisioning screen.
+   */
+  void ble_provisioning_get_password(char *buf, size_t len);
 
   /**
    * @brief Free ~110KB of BLE controller RAM.

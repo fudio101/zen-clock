@@ -65,9 +65,10 @@ credentials) → triggers BLE provisioning.
 
 ### `components/ble_provisioning/`
 
-BLE provisioning via espressif/network_provisioning. Security 1 (ECDH + SHA-256), empty PoP, device name
-`PROV_ZenClock_XXYY`. Shows QR overlay on display. Called on first boot (no credentials) or IO14 double-click. After
-provisioning succeeds, calls `ble_provisioning_release_memory()` to free BLE RAM (cannot be re-allocated).
+BLE provisioning via espressif/network_provisioning. Security 2 (SRP6a), per-device password derived from WiFi MAC
+(last 4 bytes as 8 hex chars, e.g. `D917D7DC`), username = `"wifiprov"` (hardcoded by Espressif app). Device name
+`PROV_ZenClock_XXYY`. Shows QR overlay with password on display. After provisioning succeeds, calls
+`ble_provisioning_release_memory()` to free BLE RAM (cannot be re-allocated).
 
 ### `components/settings/`
 

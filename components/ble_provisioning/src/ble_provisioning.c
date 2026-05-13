@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 // ZenClock — BLE Provisioning via espressif/network_provisioning ^1.2.4
 //
-// Security 1 (ECDH + SHA-256), device name "PROV_ZenClock_XXYY".
-// Empty PoP (no PIN required) — works with Espressif BLE Prov app.
+// Security 2 (SRP6a), device name "PROV_ZenClock_XXYY".
+// Password derived from last 4 MAC bytes (8 hex chars), shown on provisioning screen.
+// Username is fixed: "wifiprov" (Espressif BLE Prov app hardcodes this). Salt+verifier generated at start, freed on
+// PROV_END.
 //
 // ⚠️  IMPORTANT: Always call wifi_manager_stop() before ble_provisioning_start()
 //     to avoid conflict with network_prov_mgr's internal esp_wifi_connect() calls.
@@ -15,7 +17,6 @@
 #include <string.h>
 #include <esp_log.h>
 #include <esp_event.h>
-#include <esp_wifi.h>
 #include <esp_mac.h>
 #include <esp_bt.h>
 #include <freertos/FreeRTOS.h>
@@ -25,14 +26,27 @@
 #include "network_provisioning/manager.h"
 #include "network_provisioning/scheme_ble.h"
 
+// SRP6a salt+verifier generation
+#include "esp_srp.h"
+
 static const char *TAG = "BLEProv";
 
-static ble_prov_cb_t s_callback = NULL;
+#define SEC2_USERNAME "wifiprov"
+#define SEC2_USERNAME_LEN 8
+#define SEC2_SALT_LEN 16
+
+static ble_prov_cb_t s_callback = nullptr;
 static bool s_active = false;
 static bool s_mem_freed = false;
 
+// SRP6a credentials — heap-alloc'd in ble_provisioning_start(), freed on PROV_END
+static char s_sec2_password[9]; // 8 hex chars from MAC + NUL
+static char *s_sec2_salt = nullptr;
+static char *s_sec2_verifier = nullptr;
+static int s_sec2_verifier_len = 0;
+
 // ============================================================
-// Device name builder
+// Device name + password builders
 // ============================================================
 
 static void build_device_name(char *buf, size_t len)
@@ -40,6 +54,22 @@ static void build_device_name(char *buf, size_t len)
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_WIFI_STA);
   snprintf(buf, len, "PROV_ZenClock_%02X%02X", mac[4], mac[5]);
+}
+
+static void build_sec2_password(void)
+{
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  snprintf(s_sec2_password, sizeof(s_sec2_password), "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
+}
+
+static void free_sec2_credentials(void)
+{
+  free(s_sec2_salt);
+  free(s_sec2_verifier);
+  s_sec2_salt = nullptr;
+  s_sec2_verifier = nullptr;
+  s_sec2_verifier_len = 0;
 }
 
 // ============================================================
@@ -59,14 +89,14 @@ static void prov_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     ESP_LOGI(TAG, "BLE advertisement started");
     s_active = true;
     if (s_callback)
-      s_callback(BLE_PROV_STARTED, NULL, NULL);
+      s_callback(BLE_PROV_STARTED, nullptr, nullptr);
     break;
 
   case NETWORK_PROV_WIFI_CRED_RECV:
   {
-    wifi_sta_config_t *cfg = (wifi_sta_config_t *)data;
-    const char *ssid = (const char *)cfg->ssid;
-    const char *pass = (const char *)cfg->password;
+    const auto cfg = (wifi_sta_config_t *)data;
+    const auto ssid = (const char *)cfg->ssid;
+    const auto pass = (const char *)cfg->password;
     ESP_LOGI(TAG, "Credentials received: SSID=\"%s\"", ssid);
     if (s_callback)
       s_callback(BLE_PROV_CRED_RECEIVED, ssid, pass);
@@ -82,15 +112,16 @@ static void prov_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     network_prov_wifi_sta_fail_reason_t *reason = (network_prov_wifi_sta_fail_reason_t *)data;
     ESP_LOGW(TAG, "Credential verification failed (reason=%d)", reason ? (int)*reason : -1);
     if (s_callback)
-      s_callback(BLE_PROV_FAILED, NULL, NULL);
+      s_callback(BLE_PROV_FAILED, nullptr, nullptr);
     break;
   }
 
   case NETWORK_PROV_END:
     ESP_LOGI(TAG, "Provisioning ended");
     s_active = false;
+    free_sec2_credentials();
     if (s_callback)
-      s_callback(BLE_PROV_SUCCESS, NULL, NULL);
+      s_callback(BLE_PROV_SUCCESS, nullptr, nullptr);
     break;
 
   default:
@@ -106,7 +137,7 @@ esp_err_t ble_provisioning_init(ble_prov_cb_t callback)
 {
   s_callback = callback;
 
-  esp_err_t ret = esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, prov_event_handler, NULL);
+  esp_err_t ret = esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, prov_event_handler, nullptr);
 
   if (ret != ESP_OK)
   {
@@ -125,6 +156,7 @@ esp_err_t ble_provisioning_start(void)
 
   char device_name[32];
   build_device_name(device_name, sizeof(device_name));
+  build_sec2_password();
   ESP_LOGI(TAG, "Starting BLE provisioning: device_name=\"%s\"", device_name);
 
   network_prov_mgr_config_t config = {
@@ -139,17 +171,30 @@ esp_err_t ble_provisioning_start(void)
     return ret;
   }
 
-  // Security 1 (ECDH + SHA-256), empty PoP — no PIN required.
-  // Security 2 (SRP6a) requires pre-generated salt/verifier; Security 1 is
-  // sufficient for home provisioning and is fully supported by the Espressif app.
-  ret = network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_1,
-                                            (void *)"",  // PoP: empty string = no PIN
-                                            device_name, // service_name: BLE advertisement name
-                                            NULL);       // service_key: not used for BLE
+  // Generate SRP6a salt+verifier from MAC-derived password.
+  // Buffers are heap-alloc'd — freed in NETWORK_PROV_END handler (or on error below).
+  ret = esp_srp_gen_salt_verifier(SEC2_USERNAME, SEC2_USERNAME_LEN, s_sec2_password, strlen(s_sec2_password),
+                                  &s_sec2_salt, SEC2_SALT_LEN, &s_sec2_verifier, &s_sec2_verifier_len);
+  if (ret != ESP_OK)
+  {
+    ESP_LOGE(TAG, "esp_srp_gen_salt_verifier failed: %s", esp_err_to_name(ret));
+    network_prov_mgr_deinit();
+    return ret;
+  }
 
+  // sec2_params is shallow-copied by protocomm; salt/verifier buffers must outlive PROV_END.
+  network_prov_security2_params_t sec2_params = {
+      .salt = s_sec2_salt,
+      .salt_len = SEC2_SALT_LEN,
+      .verifier = s_sec2_verifier,
+      .verifier_len = (uint16_t)s_sec2_verifier_len,
+  };
+
+  ret = network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_2, (const void *)&sec2_params, device_name, nullptr);
   if (ret != ESP_OK)
   {
     ESP_LOGE(TAG, "network_prov_mgr_start_provisioning failed: %s", esp_err_to_name(ret));
+    free_sec2_credentials();
     network_prov_mgr_deinit();
     return ret;
   }
@@ -167,6 +212,7 @@ esp_err_t ble_provisioning_stop(void)
 
   network_prov_mgr_stop_provisioning();
   network_prov_mgr_deinit();
+  free_sec2_credentials();
   s_active = false;
   ESP_LOGI(TAG, "BLE provisioning stopped");
   return ESP_OK;
@@ -180,6 +226,11 @@ bool ble_provisioning_is_active(void)
 void ble_provisioning_get_device_name(char *buf, size_t len)
 {
   build_device_name(buf, len);
+}
+
+void ble_provisioning_get_password(char *buf, size_t len)
+{
+  snprintf(buf, len, "%s", s_sec2_password);
 }
 
 void ble_provisioning_release_memory(void)

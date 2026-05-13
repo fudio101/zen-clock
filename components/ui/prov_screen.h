@@ -12,8 +12,9 @@ extern "C"
    * @brief Show full-screen BLE provisioning overlay with QR code.
    * Must be called while holding the LVGL port lock.
    * @param device_name BLE advertisement name (e.g. "PROV_ZenClock_A1B2")
+   * @param password    SRP6a password shown on screen (e.g. "A1B2C3D4")
    */
-  void prov_screen_show(const char *device_name);
+  void prov_screen_show(const char *device_name, const char *password);
 
   /**
    * @brief Remove the provisioning overlay, revealing the clock screen.

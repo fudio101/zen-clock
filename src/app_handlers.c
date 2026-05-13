@@ -15,14 +15,14 @@
 static const char *TAG = "ZenClock";
 
 // ============================================================
-// WiFi reset action (shared by emergency button + nav settings)
+// Wi-Fi reset action (shared by emergency button + nav settings)
 // ============================================================
 
 static void do_reset_wifi(void)
 {
   wifi_manager_stop();
   wifi_manager_clear_credential();
-  esp_err_t ret = ble_provisioning_start();
+  const esp_err_t ret = ble_provisioning_start();
   if (ret == ESP_ERR_INVALID_STATE)
   {
     ESP_LOGW(TAG, "BLE memory released — rebooting into provisioning mode");
@@ -112,11 +112,13 @@ void on_ble_prov_event(ble_prov_event_t event, const char *ssid, const char *pas
   case BLE_PROV_STARTED:
   {
     char dev_name[32];
+    char prov_pass[9];
     ble_provisioning_get_device_name(dev_name, sizeof(dev_name));
+    ble_provisioning_get_password(prov_pass, sizeof(prov_pass));
     ESP_LOGI(TAG, "BLE provisioning active: %s", dev_name);
     lvgl_port_lock(0);
     status_bar_set_wifi_status(WIFI_STATUS_PROVISIONING);
-    prov_screen_show(dev_name);
+    prov_screen_show(dev_name, prov_pass);
     lvgl_port_unlock();
     break;
   }
@@ -139,13 +141,6 @@ void on_ble_prov_event(ble_prov_event_t event, const char *ssid, const char *pas
   case BLE_PROV_FAILED:
     ESP_LOGW(TAG, "BLE provisioning failed — bad credentials, waiting for retry");
     wifi_manager_clear_credential();
-    {
-      char dev_name[32];
-      ble_provisioning_get_device_name(dev_name, sizeof(dev_name));
-      lvgl_port_lock(0);
-      prov_screen_show(dev_name);
-      lvgl_port_unlock();
-    }
     break;
 
   default:
