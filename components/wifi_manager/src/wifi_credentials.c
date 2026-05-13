@@ -17,6 +17,8 @@ static const char *TAG = "WiFiCred";
 #define NVS_NAMESPACE "wifi_cred"
 #define NVS_KEY_SSID "ssid"
 #define NVS_KEY_PASS "pass"
+#define NVS_KEY_BSSID "bssid"
+#define NVS_KEY_CHANNEL "ch"
 
 // ============================================================
 // Internal loader — called only from wifi_manager.c (wifi_task)
@@ -105,8 +107,57 @@ esp_err_t wifi_manager_clear_credential(void)
 
   nvs_erase_key(h, NVS_KEY_SSID);
   nvs_erase_key(h, NVS_KEY_PASS);
+  nvs_erase_key(h, NVS_KEY_BSSID);
+  nvs_erase_key(h, NVS_KEY_CHANNEL);
   ret = nvs_commit(h);
   nvs_close(h);
   ESP_LOGI(TAG, "Credential cleared");
   return ret;
+}
+
+// ============================================================
+// AP hint — BSSID + channel of last successful connection.
+// Enables fast single-channel scan on next boot.
+// ============================================================
+
+void wifi_cred_save_ap_hint(const uint8_t *bssid, uint8_t channel)
+{
+  nvs_handle_t h;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h) != ESP_OK)
+  {
+    return;
+  }
+  nvs_set_blob(h, NVS_KEY_BSSID, bssid, 6);
+  nvs_set_u8(h, NVS_KEY_CHANNEL, channel);
+  nvs_commit(h);
+  nvs_close(h);
+  ESP_LOGD(TAG, "AP hint saved: ch=%d bssid=%02X:%02X:%02X:%02X:%02X:%02X", channel, bssid[0], bssid[1], bssid[2],
+           bssid[3], bssid[4], bssid[5]);
+}
+
+bool wifi_cred_load_ap_hint(uint8_t *bssid, uint8_t *channel)
+{
+  nvs_handle_t h;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &h) != ESP_OK)
+  {
+    return false;
+  }
+  size_t len = 6;
+  bool ok = (nvs_get_blob(h, NVS_KEY_BSSID, bssid, &len) == ESP_OK && len == 6 &&
+             nvs_get_u8(h, NVS_KEY_CHANNEL, channel) == ESP_OK && *channel > 0);
+  nvs_close(h);
+  return ok;
+}
+
+void wifi_cred_clear_ap_hint(void)
+{
+  nvs_handle_t h;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h) != ESP_OK)
+  {
+    return;
+  }
+  nvs_erase_key(h, NVS_KEY_BSSID);
+  nvs_erase_key(h, NVS_KEY_CHANNEL);
+  nvs_commit(h);
+  nvs_close(h);
 }

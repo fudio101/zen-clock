@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// ZenClock WiFi Manager — State-machine driven, persistent-task architecture
+// ZenClock Wi-Fi Manager — State-machine driven, persistent-task architecture
 //
 // Features:
 //   - 5-state machine: IDLE → SCANNING → CONNECTING → VERIFYING → CONNECTED
@@ -36,12 +36,12 @@ static const char *TAG = "WiFiMgr";
 // ============================================================
 // Module state
 // ============================================================
-static EventGroupHandle_t s_event_group = NULL;
-static SemaphoreHandle_t s_mutex = NULL;
-static TaskHandle_t s_task_handle = NULL;
-static wifi_event_cb_t s_callback = NULL;
+static EventGroupHandle_t s_event_group = nullptr;
+static SemaphoreHandle_t s_mutex = nullptr;
+static TaskHandle_t s_task_handle = nullptr;
+static wifi_event_cb_t s_callback = nullptr;
 static wifi_state_t s_state = WIFI_ST_IDLE;
-static esp_netif_t *s_sta_netif = NULL;
+static esp_netif_t *s_sta_netif = nullptr;
 
 static char s_ssid[SSID_MAX_LEN] = {0};
 static char s_pass[PASS_MAX_LEN] = {0};
@@ -51,7 +51,7 @@ static char s_connected_ssid[SSID_MAX_LEN] = {0};
 static wifi_ap_record_t s_match_ap;
 
 // AP list buffer — allocated once in wifi_task, reused across scans
-static wifi_ap_record_t *s_ap_list = NULL;
+static wifi_ap_record_t *s_ap_list = nullptr;
 
 // ============================================================
 // State helpers (thread-safe)
@@ -155,6 +155,55 @@ static int rssi_compare(const void *a, const void *b)
 }
 
 // ============================================================
+// Fast scan — single-channel targeted scan by BSSID + channel.
+// Returns 1 if the target SSID was found on that channel, 0 otherwise.
+// Used on boot when AP hint is cached in NVS (~0.5s vs ~8s full scan).
+// ============================================================
+static int do_fast_scan(wifi_ap_record_t *out, int max_aps, const uint8_t *bssid, uint8_t channel,
+                        const char *target_ssid)
+{
+  wifi_scan_config_t scan_cfg = {
+      .bssid = (uint8_t *)bssid,
+      .channel = channel,
+      .show_hidden = true,
+      .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+      .scan_time.active.min = 100,
+      .scan_time.active.max = FAST_SCAN_TIMEOUT_MS,
+  };
+
+  if (esp_wifi_scan_start(&scan_cfg, true) != ESP_OK)
+  {
+    return 0;
+  }
+
+  uint16_t ap_count = 0;
+  esp_wifi_scan_get_ap_num(&ap_count);
+  if (ap_count == 0)
+  {
+    return 0;
+  }
+
+  wifi_ap_record_t *records = calloc(ap_count, sizeof(wifi_ap_record_t));
+  if (!records)
+  {
+    esp_wifi_scan_get_ap_records(&ap_count, nullptr);
+    return 0;
+  }
+  esp_wifi_scan_get_ap_records(&ap_count, records);
+
+  int found = 0;
+  for (int i = 0; i < ap_count && found < max_aps; i++)
+  {
+    if (strcmp((const char *)records[i].ssid, target_ssid) == 0)
+    {
+      out[found++] = records[i];
+    }
+  }
+  free(records);
+  return found;
+}
+
+// ============================================================
 // Aggregated scan — run multiple rounds, merge by BSSID
 // Returns number of unique APs in the merged buffer.
 // ============================================================
@@ -193,7 +242,7 @@ static int do_aggregated_scan(wifi_ap_record_t *merged, int max_aps)
     if (!round_aps)
     {
       ESP_LOGW(TAG, "  Failed to allocate round buffer, skipping");
-      esp_wifi_scan_get_ap_records(&ap_count, NULL);
+      esp_wifi_scan_get_ap_records(&ap_count, nullptr);
       continue;
     }
     esp_wifi_scan_get_ap_records(&ap_count, round_aps);
@@ -273,10 +322,14 @@ static bool try_connect_candidate(const wifi_ap_record_t *ap, const char *passwo
     return false;
   }
 
-  // Disconnect any existing connection before attempting a new one.
-  // Required when network_prov_mgr leaves WiFi connected after credential verification.
-  esp_wifi_disconnect();
-  vTaskDelay(pdMS_TO_TICKS(300));
+  // Only disconnect if currently associated (e.g. after BLE provisioning left Wi-Fi connected).
+  // Unconditional disconnect + delay on a fresh boot wastes 300ms unnecessarily.
+  wifi_ap_record_t existing;
+  if (esp_wifi_sta_get_ap_info(&existing) == ESP_OK)
+  {
+    esp_wifi_disconnect();
+    vTaskDelay(pdMS_TO_TICKS(300));
+  }
 
   xEventGroupClearBits(s_event_group, BIT_GOT_IP | BIT_FAIL | BIT_DISCONNECTED);
   esp_wifi_connect();
@@ -314,9 +367,9 @@ static bool do_dns_probe(void)
     }
 
     struct addrinfo hints = {.ai_family = AF_INET};
-    struct addrinfo *res = NULL;
+    struct addrinfo *res = nullptr;
     int err = getaddrinfo(DNS_PROBE_HOST, "123", &hints, &res);
-    if (err == 0 && res != NULL)
+    if (err == 0 && res != nullptr)
     {
       freeaddrinfo(res);
       ESP_LOGI(TAG, "DNS probe OK (attempt %d/%d)", probe + 1, DNS_PROBE_MAX);
@@ -331,13 +384,13 @@ static bool do_dns_probe(void)
 }
 
 // ============================================================
-// Persistent WiFi task — state machine loop, never exits
+// Persistent Wi-Fi task — state machine loop, never exits
 // ============================================================
 static void wifi_task(void *arg)
 {
   // ── One-time setup ──
 
-  // Start WiFi driver
+  // Start Wi-Fi driver
   xEventGroupClearBits(s_event_group, BIT_STA_START);
   esp_err_t ret = esp_wifi_start();
   if (ret != ESP_OK)
@@ -387,20 +440,55 @@ static void wifi_task(void *arg)
       }
 
       ESP_LOGI(TAG, "Loaded credential: SSID=\"%s\"", s_ssid);
+
+      // After BLE provisioning, Wi-Fi is already connected (network_prov_mgr verified it).
+      // Skip scan+connect and go straight to VERIFYING.
+      wifi_ap_record_t ap_info;
+      if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK && strcmp((const char *)ap_info.ssid, s_ssid) == 0)
+      {
+        ESP_LOGI(TAG, "Already connected to \"%s\" — skipping scan+connect", s_ssid);
+        strncpy(s_connected_ssid, s_ssid, SSID_MAX_LEN - 1);
+        s_connected_ssid[SSID_MAX_LEN - 1] = '\0';
+        xEventGroupClearBits(s_event_group, BIT_GOT_IP | BIT_DISCONNECTED | BIT_FAIL);
+        set_state(WIFI_ST_VERIFYING);
+        break;
+      }
+
       set_state(WIFI_ST_SCANNING);
       break;
     }
 
     // ────────────────────────────────────────────
-    // SCANNING — aggregated scan, match credential
+    // SCANNING — fast targeted scan, then full aggregated fallback
     // ────────────────────────────────────────────
     case WIFI_ST_SCANNING:
     {
       fire_event(WIFI_MGR_SCANNING);
-
       memset(s_ap_list, 0, MAX_UNIQUE_APS * sizeof(wifi_ap_record_t));
-      int ap_count = do_aggregated_scan(s_ap_list, MAX_UNIQUE_APS);
-      ESP_LOGI(TAG, "Aggregated scan: %d unique APs after %d rounds", ap_count, SCAN_ROUNDS);
+
+      int ap_count = 0;
+      uint8_t hint_bssid[6];
+      uint8_t hint_channel;
+      if (wifi_cred_load_ap_hint(hint_bssid, &hint_channel))
+      {
+        ap_count = do_fast_scan(s_ap_list, MAX_UNIQUE_APS, hint_bssid, hint_channel, s_ssid);
+        if (ap_count > 0)
+        {
+          ESP_LOGI(TAG, "Fast scan hit: \"%s\" ch=%d", s_ssid, hint_channel);
+        }
+        else
+        {
+          ESP_LOGI(TAG, "Fast scan miss (ch=%d) — falling back to full scan", hint_channel);
+          wifi_cred_clear_ap_hint(); // stale hint — clear it
+        }
+      }
+
+      if (ap_count == 0)
+      {
+        ap_count = do_aggregated_scan(s_ap_list, MAX_UNIQUE_APS);
+        ESP_LOGI(TAG, "Aggregated scan: %d unique APs after %d rounds", ap_count, SCAN_ROUNDS);
+      }
+
       fire_event(WIFI_MGR_SCAN_DONE);
 
       if (ap_count == 0)
@@ -446,6 +534,7 @@ static void wifi_task(void *arg)
       if (try_connect_candidate(&s_match_ap, s_pass))
       {
         ESP_LOGI(TAG, "Connected to \"%s\"!", s_ssid);
+        wifi_cred_save_ap_hint(s_match_ap.bssid, s_match_ap.primary);
         set_state(WIFI_ST_VERIFYING);
       }
       else
@@ -521,7 +610,7 @@ esp_err_t wifi_manager_init(void)
   ESP_ERROR_CHECK(esp_event_loop_create_default());
   s_sta_netif = esp_netif_create_default_wifi_sta();
 
-  // WiFi driver
+  // Wi-Fi driver
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
@@ -530,16 +619,18 @@ esp_err_t wifi_manager_init(void)
   s_mutex = xSemaphoreCreateMutex();
 
   // Event handlers — bits only
-  ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
-  ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
+  ESP_ERROR_CHECK(
+      esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, nullptr, nullptr));
+  ESP_ERROR_CHECK(
+      esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, nullptr, nullptr));
 
   // Station mode
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
   // Create persistent task (starts in IDLE, waits for notification)
   BaseType_t xret = xTaskCreatePinnedToCore(wifi_task, "wifi_mgr",
-                                            4096 * 2, // 8KB stack
-                                            NULL, 3,  // Priority 3
+                                            4096 * 2,   // 8KB stack
+                                            nullptr, 3, // Priority 3
                                             &s_task_handle,
                                             0); // Pin to core 0 (WiFi core)
 
@@ -590,5 +681,5 @@ wifi_state_t wifi_manager_get_state(void)
 
 const char *wifi_manager_get_ssid(void)
 {
-  return s_connected_ssid[0] ? s_connected_ssid : NULL;
+  return s_connected_ssid[0] ? s_connected_ssid : nullptr;
 }

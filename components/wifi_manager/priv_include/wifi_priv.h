@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -23,11 +23,12 @@ extern "C"
   // Scan — multiple rounds merged by BSSID
   // ============================================================
 
-#define SCAN_ROUNDS 3           // Number of scan rounds to aggregate
-#define SCAN_MIN_TIME_MS 100    // Min active dwell time per channel (ms)
-#define SCAN_MAX_TIME_MS 300    // Max active dwell time per channel (ms)
-#define SCAN_INTER_DELAY_MS 200 // Pause between scan rounds (ms)
-#define MAX_UNIQUE_APS 64       // Max merged AP entries
+#define SCAN_ROUNDS 3            // Number of scan rounds to aggregate
+#define SCAN_MIN_TIME_MS 100     // Min active dwell time per channel (ms)
+#define SCAN_MAX_TIME_MS 300     // Max active dwell time per channel (ms)
+#define SCAN_INTER_DELAY_MS 200  // Pause between scan rounds (ms)
+#define MAX_UNIQUE_APS 64        // Max merged AP entries
+#define FAST_SCAN_TIMEOUT_MS 500 // Single-channel targeted scan timeout (ms)
 
   // ============================================================
   // Connection — per-attempt timeout
@@ -48,6 +49,12 @@ extern "C"
   // ============================================================
 
   bool wifi_cred_load(char *out_ssid, size_t ssid_len, char *out_pass, size_t pass_len);
+
+  // AP hint: cached BSSID + channel of last successful connection.
+  // Enables fast single-channel scan on next boot (~0.5s vs ~8s full scan).
+  void wifi_cred_save_ap_hint(const uint8_t *bssid, uint8_t channel);
+  bool wifi_cred_load_ap_hint(uint8_t *bssid, uint8_t *channel);
+  void wifi_cred_clear_ap_hint(void);
 
 #ifdef __cplusplus
 }
