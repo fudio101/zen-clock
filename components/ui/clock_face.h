@@ -21,6 +21,12 @@ extern "C"
    */
   void clock_face_create(lv_obj_t *parent);
 
+  /**
+   * @brief Destroy the clock face timer.
+   * Must be called before deleting the parent screen.
+   */
+  void clock_face_destroy(void);
+
 #ifdef __cplusplus
 }
 #endif

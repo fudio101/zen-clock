@@ -5,79 +5,69 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "bsp.h"
-#include "ui.h"
 #include "wifi_manager.h"
 #include "sntp_sync.h"
 #include "status_bar.h"
-#include "settings.h"
 #include "ble_provisioning.h"
 #include "prov_screen.h"
-#include "esp_timer.h"
+#include "nav.h"
 
 static const char *TAG = "ZenClock";
 
-#define BRIGHTNESS_STEP 10
+// ============================================================
+// WiFi reset action (shared by emergency button + nav settings)
+// ============================================================
+
+static void do_reset_wifi(void)
+{
+  wifi_manager_stop();
+  wifi_manager_clear_credential();
+  esp_err_t ret = ble_provisioning_start();
+  if (ret == ESP_ERR_INVALID_STATE)
+  {
+    ESP_LOGW(TAG, "BLE memory released — rebooting into provisioning mode");
+    vTaskDelay(pdMS_TO_TICKS(200));
+    esp_restart();
+  }
+}
+
+// ============================================================
+// Nav callback registration
+// ============================================================
+
+void app_handlers_register_nav_callbacks(void)
+{
+  nav_register_reset_wifi_cb(do_reset_wifi);
+}
 
 // ============================================================
 // Button handler
 // ============================================================
 
-void on_button_press(int btn_id, bool pressed)
+void on_button_press(int btn_id, bsp_btn_event_t event)
 {
-  if (!pressed)
+  // Emergency: IO14 held ≥ 3s → reset WiFi + BLE provisioning (bypasses nav)
+  if (event == BSP_BTN_EMERGENCY && btn_id == BSP_BTN_IO14)
   {
+    ESP_LOGW(TAG, "Emergency: resetting WiFi → BLE provisioning");
+    do_reset_wifi();
     return;
   }
 
-  static int64_t last_boot_press_time = 0;
-  int64_t now = esp_timer_get_time();
-
-  uint8_t current = bsp_display_get_brightness();
-  uint8_t target = current;
-
+  // Map button + event → nav action
+  nav_action_t action;
   if (btn_id == BSP_BTN_BOOT)
   {
-    if (now - last_boot_press_time < 500000) // 500ms double-click
-    {
-      bool current_theme_light = settings_get_theme_light();
-      settings_set_theme_light(!current_theme_light);
-      lvgl_port_lock(0);
-      ui_set_theme(!current_theme_light);
-      lvgl_port_unlock();
-      ESP_LOGI(TAG, "Theme toggled to %s", !current_theme_light ? "Light" : "Dark");
-      last_boot_press_time = 0;
-      return;
-    }
-    last_boot_press_time = now;
-
-    target = (current <= 100 - BRIGHTNESS_STEP) ? current + BRIGHTNESS_STEP : 100;
+    action = (event == BSP_BTN_SHORT) ? NAV_ACTION_UP : NAV_ACTION_SELECT;
   }
-  else if (btn_id == BSP_BTN_IO14)
+  else
   {
-    static int64_t last_io14_press_time = 0;
-
-    if (now - last_io14_press_time < 500000) // 500ms double-click
-    {
-      ESP_LOGW(TAG, "IO14 double-click: resetting WiFi credentials -> BLE provisioning");
-      last_io14_press_time = 0;
-      wifi_manager_stop();
-      wifi_manager_clear_credential();
-      esp_err_t ret = ble_provisioning_start();
-      if (ret == ESP_ERR_INVALID_STATE)
-      {
-        ESP_LOGW(TAG, "BLE memory released — rebooting into provisioning mode");
-        vTaskDelay(pdMS_TO_TICKS(200));
-        esp_restart();
-      }
-      return;
-    }
-    last_io14_press_time = now;
-
-    target = (current >= BRIGHTNESS_STEP) ? current - BRIGHTNESS_STEP : 0;
+    action = (event == BSP_BTN_SHORT) ? NAV_ACTION_DOWN : NAV_ACTION_BACK;
   }
 
-  bsp_display_set_brightness(target, 200);
-  ESP_LOGI(TAG, "Brightness: %d%% -> %d%%", current, target);
+  lvgl_port_lock(0);
+  nav_handle_action(action);
+  lvgl_port_unlock();
 }
 
 // ============================================================

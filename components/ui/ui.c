@@ -2,8 +2,8 @@
 // ZenClock UI — screen + theme + module composition
 
 #include "ui.h"
-#include "clock_face.h"
-#include "status_bar.h"
+#include "nav.h"
+#include "lvgl.h"
 
 void ui_init(bool is_light)
 {
@@ -13,16 +13,8 @@ void ui_init(bool is_light)
                                             !is_light, LV_FONT_DEFAULT);
   lv_disp_set_theme(dispp, theme);
 
-  // --- Main screen ---
-  lv_obj_t *screen = lv_obj_create(NULL);
-  lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
-
-  // --- Widget modules ---
-  clock_face_create(screen);
-  status_bar_create(screen);
-
-  // --- Load screen ---
-  lv_disp_load_scr(screen);
+  // --- Navigation (creates and loads initial clock screen) ---
+  nav_init();
 }
 
 void ui_set_theme(bool is_light)

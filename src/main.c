@@ -21,6 +21,7 @@ void app_main(void)
   // Initialize NVS and load settings
   settings_init();
   bool is_light = settings_get_theme_light();
+  uint8_t brightness = settings_get_brightness();
 
   // Initialize UI (self-contained: creates all widgets + timers)
   lvgl_port_lock(0);
@@ -28,7 +29,7 @@ void app_main(void)
   lvgl_port_unlock();
 
   // Fade in backlight smoothly over 2 seconds
-  bsp_display_set_brightness(100, 2000);
+  bsp_display_set_brightness(brightness, 2000);
 
   // Initialize buttons for brightness control
   bsp_buttons_init(on_button_press);
@@ -37,7 +38,8 @@ void app_main(void)
   wifi_manager_init();
   wifi_manager_set_callback(on_wifi_event);
   ble_provisioning_init(on_ble_prov_event);
+  app_handlers_register_nav_callbacks();
   wifi_manager_start();
 
-  ESP_LOGI("ZenClock", "ZenClock started — BOOT=bright+, IO14=bright-");
+  ESP_LOGI("ZenClock", "ZenClock started — BOOT=up/select, IO14=down/back, hold IO14=reset WiFi");
 }

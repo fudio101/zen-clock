@@ -7,6 +7,7 @@
 static const char *TAG = "Settings";
 static const char *NVS_NAMESPACE = "zenclock";
 static const char *KEY_THEME_LIGHT = "theme_light";
+static const char *KEY_BRIGHTNESS = "brightness";
 
 void settings_init(void)
 {
@@ -75,6 +76,69 @@ void settings_set_theme_light(bool is_light)
     else
     {
       ESP_LOGI(TAG, "Saved theme config: %s", is_light ? "Light" : "Dark");
+    }
+  }
+  nvs_close(my_handle);
+}
+
+uint8_t settings_get_brightness(void)
+{
+  nvs_handle_t my_handle;
+  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &my_handle);
+  if (err != ESP_OK)
+  {
+    return 100; // default: full brightness
+  }
+
+  uint8_t val = 100;
+  err = nvs_get_u8(my_handle, KEY_BRIGHTNESS, &val);
+  switch (err)
+  {
+  case ESP_OK:
+    ESP_LOGI(TAG, "Loaded brightness: %d%%", val);
+    break;
+  case ESP_ERR_NVS_NOT_FOUND:
+    ESP_LOGD(TAG, "Brightness not found, using default (100%%)");
+    break;
+  default:
+    ESP_LOGE(TAG, "Error reading brightness (%s)", esp_err_to_name(err));
+    break;
+  }
+
+  nvs_close(my_handle);
+  return val;
+}
+
+void settings_set_brightness(uint8_t percent)
+{
+  if (percent > 100)
+  {
+    percent = 100;
+  }
+
+  nvs_handle_t my_handle;
+  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &my_handle);
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Error opening NVS handle (%s)", esp_err_to_name(err));
+    return;
+  }
+
+  err = nvs_set_u8(my_handle, KEY_BRIGHTNESS, percent);
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Error saving brightness (%s)", esp_err_to_name(err));
+  }
+  else
+  {
+    err = nvs_commit(my_handle);
+    if (err != ESP_OK)
+    {
+      ESP_LOGE(TAG, "Error committing NVS (%s)", esp_err_to_name(err));
+    }
+    else
+    {
+      ESP_LOGI(TAG, "Saved brightness: %d%%", percent);
     }
   }
   nvs_close(my_handle);

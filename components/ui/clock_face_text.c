@@ -11,6 +11,7 @@
 // ============================================================
 static lv_obj_t *s_time_label = NULL;
 static lv_obj_t *s_date_label = NULL;
+static lv_timer_t *s_clock_timer = NULL;
 
 // ============================================================
 // Timer callback — runs inside lv_timer_handler() on LVGL task
@@ -56,6 +57,17 @@ void clock_face_create(lv_obj_t *parent)
   lv_label_set_text(s_date_label, "--/--/----");
 
   // --- LVGL timer: update every 1 second ---
-  lv_timer_t *timer = lv_timer_create(clock_timer_cb, 1000, NULL);
-  lv_timer_ready(timer); // Fire immediately on first tick
+  s_clock_timer = lv_timer_create(clock_timer_cb, 1000, NULL);
+  lv_timer_ready(s_clock_timer); // Fire immediately on first tick
+}
+
+void clock_face_destroy(void)
+{
+  if (s_clock_timer)
+  {
+    lv_timer_delete(s_clock_timer);
+    s_clock_timer = NULL;
+  }
+  s_time_label = NULL;
+  s_date_label = NULL;
 }

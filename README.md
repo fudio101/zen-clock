@@ -4,27 +4,27 @@ A beautiful clock project running on the **LilyGo T-Display-S3** board.
 
 ## Hardware
 
-| Spec | Value |
-|---|---|
-| **Board** | LilyGo T-Display-S3 (non-touch, v1.2) |
-| **MCU** | ESP32-S3R8 (Dual-core Xtensa LX7, 240 MHz) |
-| **Flash** | 16 MB |
-| **PSRAM** | 8 MB Octal (OPI) |
-| **Display** | 1.9" ST7789, 320×170, Intel 8080 8-bit parallel |
-| **Backlight** | PWM controlled via ESP-IDF LEDC (lcd_backlight component) |
-| **Battery** | GPIO4 ADC via resistor divider |
-| **Buttons** | GPIO0 (BOOT) + GPIO14 — brightness + settings |
+| Spec          | Value                                                                                      |
+|---------------|--------------------------------------------------------------------------------------------|
+| **Board**     | LilyGo T-Display-S3 (non-touch, v1.2)                                                      |
+| **MCU**       | ESP32-S3R8 (Dual-core Xtensa LX7, 240 MHz)                                                 |
+| **Flash**     | 16 MB                                                                                      |
+| **PSRAM**     | 8 MB Octal (OPI)                                                                           |
+| **Display**   | 1.9" ST7789, 320×170, Intel 8080 8-bit parallel                                            |
+| **Backlight** | PWM controlled via ESP-IDF LEDC (lcd_backlight component)                                  |
+| **Battery**   | GPIO4 ADC via resistor divider                                                             |
+| **Buttons**   | GPIO0 (BOOT) + GPIO14 — 3-button navigation (UP/Select, DOWN/Back, hold IO14 = WiFi reset) |
 
 ## Software Stack
 
-| Layer | Technology |
-|---|---|
-| **Framework** | ESP-IDF v6.0.0 (via PlatformIO) |
-| **Graphics** | LVGL 9.5.0 |
-| **LVGL Port** | [esp_lvgl_port](https://github.com/espressif/esp-bsp/tree/master/components/esp_lvgl_port) |
-| **UI** | Hand-written LVGL code (no external UI designer) |
-| **Provisioning** | espressif/network_provisioning ^1.2.4 (BLE) |
-| **Build System** | PlatformIO + ESP-IDF Component Manager |
+| Layer            | Technology                                                                                 |
+|------------------|--------------------------------------------------------------------------------------------|
+| **Framework**    | ESP-IDF v6.0.0 (via PlatformIO)                                                            |
+| **Graphics**     | LVGL 9.5.0                                                                                 |
+| **LVGL Port**    | [esp_lvgl_port](https://github.com/espressif/esp-bsp/tree/master/components/esp_lvgl_port) |
+| **UI**           | Hand-written LVGL code (no external UI designer)                                           |
+| **Provisioning** | espressif/network_provisioning ^1.2.4 (BLE)                                                |
+| **Build System** | PlatformIO + ESP-IDF Component Manager                                                     |
 
 ## Project Structure
 
@@ -47,8 +47,12 @@ ZenClock/
 │   │   └── README.md          # 📖 SNTP architecture & API docs
 │   ├── ui/                    # Hand-written LVGL UI
 │   │   ├── README.md          # 📖 Layout, constraints & widget docs
-│   │   ├── ui.h               # Public API + widget handles
-│   │   ├── ui.c               # Screen creation + widget layout
+│   │   ├── ui.h               # Public API
+│   │   ├── ui.c               # Theme init + delegates to nav
+│   │   ├── nav.c/.h           # Screen navigation state machine
+│   │   ├── menu_screen.c/.h   # Main menu screen
+│   │   ├── settings_screen.c/.h # Settings screen with inline edit
+│   │   ├── clock_face_text.c  # Text-based clock face rendering
 │   │   └── prov_screen.c/.h   # QR code overlay for BLE provisioning
 │   ├── wifi_manager/          # WiFi connection + BLE provisioning fallback
 │   │   └── README.md          # 📖 WiFi manager API & architecture
@@ -69,7 +73,11 @@ ZenClock/
 └── sdkconfig.lilygo-t-display-s3
 ```
 
-> **Component docs:** See [`components/bsp/README.md`](components/bsp/README.md), [`components/ui/README.md`](components/ui/README.md), [`components/sntp_sync/README.md`](components/sntp_sync/README.md), [`components/settings/README.md`](components/settings/README.md), and [`components/wifi_manager/README.md`](components/wifi_manager/README.md) for detailed API documentation.
+> **Component docs:** See [`components/bsp/README.md`](components/bsp/README.md), [
+`components/ui/README.md`](components/ui/README.md), [
+`components/sntp_sync/README.md`](components/sntp_sync/README.md), [
+`components/settings/README.md`](components/settings/README.md), and [
+`components/wifi_manager/README.md`](components/wifi_manager/README.md) for detailed API documentation.
 
 ## Getting Started
 
@@ -94,19 +102,32 @@ pio device monitor
 ### First Boot
 
 **On first boot (no WiFi credentials in NVS):**
+
 1. Display shows ZenClock UI with smooth 2-second backlight fade-in
 2. WiFi manager fires `WIFI_MGR_NO_CRED` event → triggers BLE provisioning
 3. BLE provisioning QR code overlay appears on display
-4. Use the [Espressif BLE Provisioning app](https://github.com/espressif/esp-idf/tree/master/tools/esp_prov) to scan QR and provision WiFi
+4. Use the [Espressif BLE Provisioning app](https://github.com/espressif/esp-idf/tree/master/tools/esp_prov) to scan QR
+   and provision WiFi
 5. Once connected, provisioning screen closes and clock displays time (synced via SNTP)
 
 **Button Controls:**
+
 - **BOOT button (GPIO0)**
-  - Single-click: Brightness UP (+10%)
-  - Double-click (500ms): Toggle Light/Dark theme
+    - Short press: Navigate UP (or increase value in edit mode)
+    - Long press: SELECT / Enter (open menu or confirm edit)
 - **Side button (GPIO14)**
-  - Single-click: Brightness DOWN (-10%)
-  - Double-click (500ms): Clear WiFi credentials → restart BLE provisioning
+    - Short press: Navigate DOWN (or decrease value in edit mode)
+    - Long press: BACK / Exit (go back or exit edit mode)
+    - Hold 3 seconds (EMERGENCY): Clear WiFi credentials → BLE provisioning
+
+**Navigation Flow:**
+
+```
+Clock → (any long press) → Menu → (Select) → Settings
+Settings items: Theme, Brightness, Reset WiFi
+```
+
+Settings items use inline edit mode — long press to enter, UP/DOWN to change, long press to confirm (auto-saved to NVS).
 
 Battery status is displayed in the top-right corner.
 
@@ -122,15 +143,16 @@ pio run -t menuconfig
 
 Ensure the following settings are configured:
 
-| Setting | Path | Value |
-|---|---|---|
-| PSRAM Mode | Component config → ESP PSRAM → SPI RAM config → Mode | **Octal** |
-| PSRAM Speed | Component config → ESP PSRAM → SPI RAM config → Speed | **80 MHz** |
-| CPU Frequency | Component config → ESP System Settings → CPU frequency | **240 MHz** |
-| FreeRTOS Tick | Component config → FreeRTOS → Kernel → Tick rate (Hz) | **1000** |
-| Flash Size | Serial flasher config → Flash size | **16 MB** |
-| LVGL Color Depth | Component config → LVGL → Display → Color depth | **16** |
-| Montserrat 14 | Component config → LVGL → Font usage → Enable Montserrat 14 | **✓** |
+| Setting          | Path                                                        | Value       |
+|------------------|-------------------------------------------------------------|-------------|
+| PSRAM Mode       | Component config → ESP PSRAM → SPI RAM config → Mode        | **Octal**   |
+| PSRAM Speed      | Component config → ESP PSRAM → SPI RAM config → Speed       | **80 MHz**  |
+| CPU Frequency    | Component config → ESP System Settings → CPU frequency      | **240 MHz** |
+| FreeRTOS Tick    | Component config → FreeRTOS → Kernel → Tick rate (Hz)       | **1000**    |
+| Flash Size       | Serial flasher config → Flash size                          | **16 MB**   |
+| LVGL Color Depth | Component config → LVGL → Display → Color depth             | **16**      |
+| Montserrat 14    | Component config → LVGL → Font usage → Enable Montserrat 14 | **✓**       |
+| Montserrat 48    | Component config → LVGL → Font usage → Enable Montserrat 48 | **✓**       |
 
 > ⚠️ **Never set PSRAM to Quad mode** — this will cause a boot loop on the T-Display-S3.
 
@@ -140,15 +162,19 @@ Ensure the following settings are configured:
 
 ### Display Garbled / Smeared
 
-The ST7789 display orientation must be configured in **two places** with matching values. See [`components/bsp/README.md`](components/bsp/README.md#display-orientation) for details.
+The ST7789 display orientation must be configured in **two places** with matching values. See [
+`components/bsp/README.md`](components/bsp/README.md#display-orientation) for details.
 
 ### Rendering Artifacts
 
-LVGL buffer must be set to **full screen** (`LCD_H_RES * LCD_V_RES`) in `bsp_display.c`. Smaller buffers cause smearing when labels update text dynamically.
+LVGL buffer must be set to **full screen** (`LCD_H_RES * LCD_V_RES`) in `bsp_display.c`. Smaller buffers cause smearing
+when labels update text dynamically.
 
 ### Panel Container Crash
 
-Do **not** use `lv_obj_create(parent)` as a container/panel in the UI — it causes a `StoreProhibited` crash during font rendering. Place all widgets directly on the screen object. See [`components/ui/README.md`](components/ui/README.md#design-constraints) for details.
+Do **not** use `lv_obj_create(parent)` as a container/panel in the UI — it causes a `StoreProhibited` crash during font
+rendering. Place all widgets directly on the screen object. See [
+`components/ui/README.md`](components/ui/README.md#design-constraints) for details.
 
 ---
 

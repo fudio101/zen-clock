@@ -61,6 +61,15 @@ extern "C"
    */
   void status_bar_set_sntp_status(sntp_status_t status);
 
+  /**
+   * @brief Destroy the status bar and its battery timer.
+   *
+   * Must be called before deleting the parent screen to avoid
+   * stale timer references. Safe to call if not created.
+   * Must be called inside lvgl_port_lock()/unlock().
+   */
+  void status_bar_destroy(void);
+
 #ifdef __cplusplus
 }
 #endif

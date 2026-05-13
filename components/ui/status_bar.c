@@ -16,6 +16,11 @@ static lv_obj_t *s_bat_icon = NULL;
 static lv_obj_t *s_bat_pct = NULL;
 static lv_obj_t *s_wifi_icon = NULL;
 static lv_obj_t *s_sntp_icon = NULL;
+static lv_timer_t *s_bat_timer = NULL;
+
+// Persist status across screen switches so icons restore correctly on recreate
+static wifi_status_t s_last_wifi_status = WIFI_STATUS_DISCONNECTED;
+static sntp_status_t s_last_sntp_status = SNTP_STATUS_IDLE;
 
 // ============================================================
 // Re-align the status bar chain (right-to-left)
@@ -132,12 +137,18 @@ void status_bar_create(lv_obj_t *parent)
   lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
 
   // --- LVGL timer: update battery every 30 seconds ---
-  lv_timer_t *timer = lv_timer_create(battery_timer_cb, 30000, NULL);
-  lv_timer_ready(timer); // Fire immediately on first tick
+  s_bat_timer = lv_timer_create(battery_timer_cb, 30000, NULL);
+  lv_timer_ready(s_bat_timer); // Fire immediately on first tick
+
+  // Restore last known status (survives screen transitions)
+  status_bar_set_wifi_status(s_last_wifi_status);
+  status_bar_set_sntp_status(s_last_sntp_status);
 }
 
 void status_bar_set_wifi_status(wifi_status_t status)
 {
+  s_last_wifi_status = status;
+
   if (!s_wifi_icon)
   {
     return;
@@ -188,6 +199,8 @@ void status_bar_set_wifi_status(wifi_status_t status)
 
 void status_bar_set_sntp_status(sntp_status_t status)
 {
+  s_last_sntp_status = status;
+
   if (!s_sntp_icon)
   {
     return;
@@ -222,4 +235,17 @@ void status_bar_set_sntp_status(sntp_status_t status)
 
   // Re-align entire chain after icon change
   realign_chain();
+}
+
+void status_bar_destroy(void)
+{
+  if (s_bat_timer)
+  {
+    lv_timer_delete(s_bat_timer);
+    s_bat_timer = NULL;
+  }
+  s_bat_icon = NULL;
+  s_bat_pct = NULL;
+  s_wifi_icon = NULL;
+  s_sntp_icon = NULL;
 }

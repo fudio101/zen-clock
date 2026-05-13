@@ -66,17 +66,27 @@ extern "C"
 #define BSP_BTN_COUNT 2
 
   /**
+   * @brief Button event types (timing-based detection).
+   */
+  typedef enum
+  {
+    BSP_BTN_SHORT,     ///< Released within < 800ms
+    BSP_BTN_LONG,      ///< Held ≥ 800ms (fires while still held)
+    BSP_BTN_EMERGENCY, ///< Held ≥ 3000ms (IO14 only, fires while still held)
+  } bsp_btn_event_t;
+
+  /**
    * @brief Button event callback type.
    *
    * @param btn_id  BSP_BTN_BOOT or BSP_BTN_IO14
-   * @param pressed true = pressed, false = released
+   * @param event   BSP_BTN_SHORT, BSP_BTN_LONG, or BSP_BTN_EMERGENCY
    */
-  typedef void (*bsp_button_cb_t)(int btn_id, bool pressed);
+  typedef void (*bsp_button_cb_t)(int btn_id, bsp_btn_event_t event);
 
   /**
    * @brief Initialize buttons and start monitoring task.
    *
-   * @param callback Function called on button press/release events
+   * @param callback Function called on button events (short/long/emergency)
    */
   void bsp_buttons_init(bsp_button_cb_t callback);
 

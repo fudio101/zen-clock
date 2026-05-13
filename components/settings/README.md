@@ -26,11 +26,13 @@ Header: [`settings.h`](settings.h)
 | `settings_init()`                    | Initializes the NVS flash partition. Must be called early in `app_main()` before any reads/writes.        |
 | `settings_get_theme_light()`         | Returns the saved theme mode (`true` for light, `false` for dark). Returns `false` by default if not set. |
 | `settings_set_theme_light(is_light)` | Saves the specified theme mode to NVS and commits the change.                                             |
+| `settings_get_brightness()`          | Returns the saved brightness percentage (0–100). Returns `100` by default if not set.                     |
+| `settings_set_brightness(percent)`   | Saves brightness percentage to NVS (clamped to 0–100) and commits.                                        |
 
 ## Flow
 
 1. `app_main` calls `settings_init()`
-2. `app_main` calls `settings_get_theme_light()` to get the stored theme and passes it to `ui_init()`
+2. `app_main` calls `settings_get_theme_light()` and `settings_get_brightness()`, passes both to init
 3. UI or hardware buttons trigger a theme change via `settings_set_theme_light(new_theme)`
 
 ## Rules for AI Agents
