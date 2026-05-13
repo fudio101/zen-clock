@@ -5,13 +5,15 @@ A lightweight, state-machine-based WiFi connection manager for ESP32-S3, designe
 ## Overview
 
 WiFi Manager handles the complete WiFi lifecycle:
+
 1. Load stored credentials from NVS
 2. Scan for matching networks
 3. Connect and obtain IP
 4. Verify internet connectivity via DNS probe
 5. Report connection state via callback events
 
-The component uses a persistent FreeRTOS task to manage state transitions and integrates with the rest of the system via event callbacks.
+The component uses a persistent FreeRTOS task to manage state transitions and integrates with the rest of the system via
+event callbacks.
 
 ## Architecture
 
@@ -46,12 +48,13 @@ IDLE ──start()──► SCANNING ──match──► CONNECTING ──got I
 
 Credentials are stored in NVS under namespace `"wifi_cred"`:
 
-| Key | Value |
-|-----|-------|
-| `"ssid"` | Network SSID (max 32 bytes) |
+| Key      | Value                           |
+|----------|---------------------------------|
+| `"ssid"` | Network SSID (max 32 bytes)     |
 | `"pass"` | Network password (max 64 bytes) |
 
 **Important:**
+
 - **Single credential only** — no multi-credential support or hash map
 - NVS must be initialized before `wifi_manager_init()` (typically via `settings_init()`)
 - Empty credentials → IDLE state fires `WIFI_MGR_NO_CRED` event immediately
@@ -168,17 +171,17 @@ typedef void (*wifi_mgr_callback_t)(wifi_mgr_event_t event);
 
 WiFi Manager fires events via the callback when state changes:
 
-| Event | When | Expected Action |
-|-------|------|---|
-| `WIFI_MGR_SCANNING` | Scan started | Update UI: show "Scanning..." |
-| `WIFI_MGR_CONNECTING` | Attempting to connect to matched SSID | Update UI: show "Connecting to [SSID]..." |
-| `WIFI_MGR_GOT_IP` | Got IP address via DHCP | (Internal: DNS probe in progress) |
-| `WIFI_MGR_CONNECTED` | DNS probe successful, internet verified | Update UI: show WiFi icon, enable time display |
-| `WIFI_MGR_DISCONNECTED` | Lost WiFi connection | Update UI: show disconnected state |
-| `WIFI_MGR_NO_CRED` | No credentials stored in NVS at start | Call `ble_provisioning_start()` to enter setup mode |
-| `WIFI_MGR_NO_MATCH` | Stored SSID not found in scan results | Call `wifi_manager_stop()`, then `ble_provisioning_start()` |
-| `WIFI_MGR_ALL_FAILED` | Connection attempt failed (bad password, timeout, etc.) | Call `wifi_manager_stop()`, then `ble_provisioning_start()` |
-| `WIFI_MGR_SCAN_DONE` | Scan complete (informational) | (Generally not used in UI) |
+| Event                   | When                                                    | Expected Action                                             |
+|-------------------------|---------------------------------------------------------|-------------------------------------------------------------|
+| `WIFI_MGR_SCANNING`     | Scan started                                            | Update UI: show "Scanning..."                               |
+| `WIFI_MGR_CONNECTING`   | Attempting to connect to matched SSID                   | Update UI: show "Connecting to [SSID]..."                   |
+| `WIFI_MGR_GOT_IP`       | Got IP address via DHCP                                 | (Internal: DNS probe in progress)                           |
+| `WIFI_MGR_CONNECTED`    | DNS probe successful, internet verified                 | Update UI: show WiFi icon, enable time display              |
+| `WIFI_MGR_DISCONNECTED` | Lost WiFi connection                                    | Update UI: show disconnected state                          |
+| `WIFI_MGR_NO_CRED`      | No credentials stored in NVS at start                   | Call `ble_provisioning_start()` to enter setup mode         |
+| `WIFI_MGR_NO_MATCH`     | Stored SSID not found in scan results                   | Call `wifi_manager_stop()`, then `ble_provisioning_start()` |
+| `WIFI_MGR_ALL_FAILED`   | Connection attempt failed (bad password, timeout, etc.) | Call `wifi_manager_stop()`, then `ble_provisioning_start()` |
+| `WIFI_MGR_SCAN_DONE`    | Scan complete (informational)                           | (Generally not used in UI)                                  |
 
 ## Integration & Rules
 
@@ -192,9 +195,9 @@ WiFi Manager fires events via the callback when state changes:
    ```
 
 2. **Handle failure events:**
-   - On `WIFI_MGR_NO_CRED`, `WIFI_MGR_NO_MATCH`, `WIFI_MGR_ALL_FAILED`, `WIFI_MGR_DISCONNECTED`
-   - Call `wifi_manager_stop()` to disconnect WiFi cleanly
-   - Then call `ble_provisioning_start()` to enter provisioning mode
+    - On `WIFI_MGR_NO_CRED`, `WIFI_MGR_NO_MATCH`, `WIFI_MGR_ALL_FAILED`, `WIFI_MGR_DISCONNECTED`
+    - Call `wifi_manager_stop()` to disconnect WiFi cleanly
+    - Then call `ble_provisioning_start()` to enter provisioning mode
 
 3. **Lock UI updates in callback:**
    ```c
@@ -210,6 +213,7 @@ WiFi Manager fires events via the callback when state changes:
 ### WiFi Initialization Dependencies
 
 WiFi Manager depends on:
+
 - **NVS** (initialized by `settings_init()` before `wifi_manager_init()`)
 - **network interface** (created in `wifi_manager_init()`)
 - **event loop** (from IDF, used internally for WiFi events)
@@ -228,7 +232,9 @@ When WiFi needs credentials (no match, connection failed, user reset):
 
 ### DNS Probe (Internet Verification)
 
-After obtaining an IP address, WiFi Manager sends a DNS query to `pool.ntp.org` to verify internet connectivity. This distinguishes:
+After obtaining an IP address, WiFi Manager sends a DNS query to `pool.ntp.org` to verify internet connectivity. This
+distinguishes:
+
 - **Local WiFi only** (no internet, e.g., captive portal) — VERIFYING state, no CONNECTED event
 - **Full internet access** — CONNECTED event fires
 
@@ -238,17 +244,18 @@ This is important for NTP synchronization and ensures the device is truly online
 
 WiFi Manager uses hardcoded timeouts (see `wifi_priv.h`):
 
-| Timeout | Value | Purpose |
-|---------|-------|---------|
-| Scan timeout | 10 seconds | WiFi scan duration |
+| Timeout            | Value      | Purpose                |
+|--------------------|------------|------------------------|
+| Scan timeout       | 10 seconds | WiFi scan duration     |
 | Connection timeout | 15 seconds | Time to get IP address |
-| DNS probe timeout | 5 seconds | Internet verification |
+| DNS probe timeout  | 5 seconds  | Internet verification  |
 
 To adjust, edit `wifi_priv.h` and rebuild.
 
 ## Constraints & Anti-Patterns
 
 **DO:**
+
 - Call `wifi_manager_init()` once at startup
 - Set callback before calling `wifi_manager_start()`
 - Lock LVGL in callback before updating UI
@@ -256,6 +263,7 @@ To adjust, edit `wifi_priv.h` and rebuild.
 - Handle all failure events (NO_CRED, NO_MATCH, ALL_FAILED, DISCONNECTED)
 
 **DO NOT:**
+
 - Include `wifi_priv.h` outside this component
 - Call `esp_wifi_*` functions directly
 - Update UI without `lvgl_port_lock()` in callback

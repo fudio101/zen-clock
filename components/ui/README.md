@@ -10,7 +10,8 @@ The UI component manages the main display using LVGL, organized around **discret
 - **Status Bar** — Displays WiFi, battery, and theme indicators
 - **Provisioning Screen** — Full-screen QR code overlay for BLE setup
 
-All widgets work within a unified theming system (light/dark) and integrate seamlessly with the LVGL port lock for thread-safe updates.
+All widgets work within a unified theming system (light/dark) and integrate seamlessly with the LVGL port lock for
+thread-safe updates.
 
 ## Architecture
 
@@ -95,7 +96,8 @@ void clock_face_set_theme(bool is_light);
 
 **Layout:**
 
-Clock face centers on the main screen with large, legible time display. Face style is configurable (e.g., HH:MM:SS text format, numeric digits, etc.).
+Clock face centers on the main screen with large, legible time display. Face style is configurable (e.g., HH:MM:SS text
+format, numeric digits, etc.).
 
 ### Status Bar (`status_bar.h`)
 
@@ -132,12 +134,12 @@ void status_bar_set_theme(bool is_light);
 
 **WiFi Status Values:**
 
-| Status | Icon | When |
-|--------|------|------|
-| `WIFI_STATUS_DISCONNECTED` | ✕ (gray) | No WiFi connection |
-| `WIFI_STATUS_CONNECTING` | ◐ (animating) | Scanning/connecting |
-| `WIFI_STATUS_CONNECTED` | ✓ (color) | WiFi + internet verified |
-| `WIFI_STATUS_PROVISIONING` | ◆ (cyan/Bluetooth) | BLE provisioning active |
+| Status                     | Icon               | When                     |
+|----------------------------|--------------------|--------------------------|
+| `WIFI_STATUS_DISCONNECTED` | ✕ (gray)           | No WiFi connection       |
+| `WIFI_STATUS_CONNECTING`   | ◐ (animating)      | Scanning/connecting      |
+| `WIFI_STATUS_CONNECTED`    | ✓ (color)          | WiFi + internet verified |
+| `WIFI_STATUS_PROVISIONING` | ◆ (cyan/Bluetooth) | BLE provisioning active  |
 
 **Theme Indicator:**
 
@@ -255,16 +257,16 @@ lvgl_port_unlock();
 ### Provisioning Screen Lifecycle
 
 1. **Show during BLE provisioning:**
-   - Call `prov_screen_show(device_name)` when `ble_provisioning_start()` is called
-   - QR code displays setup instructions
+    - Call `prov_screen_show(device_name)` when `ble_provisioning_start()` is called
+    - QR code displays setup instructions
 
 2. **Hide on provisioning complete:**
-   - Call `prov_screen_hide()` after BLE provisioning succeeds or times out
-   - Reveals clock screen beneath
+    - Call `prov_screen_hide()` after BLE provisioning succeeds or times out
+    - Reveals clock screen beneath
 
 3. **Thread safety:**
-   - Always call within `lvgl_port_lock()` / `lvgl_port_unlock()`
-   - Safe to call `prov_screen_show()` multiple times (no-op if already shown)
+    - Always call within `lvgl_port_lock()` / `lvgl_port_unlock()`
+    - Safe to call `prov_screen_show()` multiple times (no-op if already shown)
 
 ### Color & Typography
 

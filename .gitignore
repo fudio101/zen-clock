@@ -1,6 +1,8 @@
 .pio
 .vscode/
+.idea/
 .cache/
+.agent/
 example/
 managed_components/
 

@@ -34,28 +34,28 @@ Header: [`include/bsp.h`](include/bsp.h)
 
 ### Display
 
-| Function | Description |
-|---|---|
-| `void bsp_display_init(lv_disp_t **disp, bool backlight_on)` | Initialize all hardware (I80 bus, ST7789, LVGL port, ADC, backlight, power GPIO). Call **once** from `app_main`. |
-| `void bsp_display_set_brightness(uint8_t percent, uint32_t fade_ms)` | Set backlight 0–100% with optional smooth fade (0 = instant). |
-| `uint8_t bsp_display_get_brightness(void)` | Get current brightness percentage. |
+| Function                                                             | Description                                                                                                      |
+|----------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| `void bsp_display_init(lv_disp_t **disp, bool backlight_on)`         | Initialize all hardware (I80 bus, ST7789, LVGL port, ADC, backlight, power GPIO). Call **once** from `app_main`. |
+| `void bsp_display_set_brightness(uint8_t percent, uint32_t fade_ms)` | Set backlight 0–100% with optional smooth fade (0 = instant).                                                    |
+| `uint8_t bsp_display_get_brightness(void)`                           | Get current brightness percentage.                                                                               |
 
 ### Battery
 
-| Function | Description |
-|---|---|
-| `int bsp_battery_get_voltage(void)` | Battery voltage in millivolts (×2 corrected for resistor divider). Returns `-1` on error. |
+| Function                               | Description                                                                                      |
+|----------------------------------------|--------------------------------------------------------------------------------------------------|
+| `int bsp_battery_get_voltage(void)`    | Battery voltage in millivolts (×2 corrected for resistor divider). Returns `-1` on error.        |
 | `int bsp_battery_get_percentage(void)` | Battery level 0–100% using a curve-fitting formula (float, hardware FPU). Returns `-1` on error. |
-| `bool bsp_battery_usb_connected(void)` | `true` if voltage ≥ 4500 mV (USB power detected). |
+| `bool bsp_battery_usb_connected(void)` | `true` if voltage ≥ 4500 mV (USB power detected).                                                |
 
 ### Buttons
 
-| Function / Type | Description |
-|---|---|
-| `BSP_BTN_BOOT` (0) | BOOT button identifier (GPIO0) |
-| `BSP_BTN_IO14` (1) | Side button identifier (GPIO14) |
+| Function / Type                                             | Description                                                                        |
+|-------------------------------------------------------------|------------------------------------------------------------------------------------|
+| `BSP_BTN_BOOT` (0)                                          | BOOT button identifier (GPIO0)                                                     |
+| `BSP_BTN_IO14` (1)                                          | Side button identifier (GPIO14)                                                    |
 | `typedef void (*bsp_button_cb_t)(int btn_id, bool pressed)` | Callback type: `btn_id` = `BSP_BTN_BOOT` or `BSP_BTN_IO14`, `pressed` = true/false |
-| `void bsp_buttons_init(bsp_button_cb_t callback)` | Start button monitoring task. Calls `callback` on debounced press/release events. |
+| `void bsp_buttons_init(bsp_button_cb_t callback)`           | Start button monitoring task. Calls `callback` on debounced press/release events.  |
 
 ## Internal API (`bsp_priv.h`)
 
@@ -63,12 +63,12 @@ Header: [`include/bsp.h`](include/bsp.h)
 
 These functions are called by `bsp_display_init()` during startup:
 
-| Function | Called by | Purpose |
-|---|---|---|
-| `bsp_backlight_setup()` | `bsp_display.c` | Init LEDC PWM via `lcd_backlight` component |
+| Function                              | Called by       | Purpose                                      |
+|---------------------------------------|-----------------|----------------------------------------------|
+| `bsp_backlight_setup()`               | `bsp_display.c` | Init LEDC PWM via `lcd_backlight` component  |
 | `bsp_backlight_set(percent, fade_ms)` | `bsp_display.c` | Delegate to `lcd_backlight_set_brightness()` |
-| `bsp_backlight_get()` | `bsp_display.c` | Delegate to `lcd_backlight_get_brightness()` |
-| `bsp_battery_setup()` | `bsp_display.c` | Init ADC1 + calibration handle |
+| `bsp_backlight_get()`                 | `bsp_display.c` | Delegate to `lcd_backlight_get_brightness()` |
+| `bsp_battery_setup()`                 | `bsp_display.c` | Init ADC1 + calibration handle               |
 
 ## Init Sequence
 
@@ -104,18 +104,18 @@ esp_lcd_panel_set_gap(panel_handle, 0, 35);
 
 ## Key Constants
 
-| Constant | Value | Location |
-|---|---|---|
-| Pixel clock | 17 MHz | `bsp_display.c` |
-| I80 bus width | 8 bits | `bsp_display.c` |
-| LVGL buffer size | `320×170` pixels (full screen) | `bsp_display.c` |
-| LVGL double buffer | Yes (PSRAM, ~213 KB total) | `bsp_display.c` |
-| LVGL task stack | 6 KB, priority 2, core 1 | `bsp_display.c` |
-| I80 max transfer | Full screen (`320×170×2` bytes) | `bsp_display.c` |
-| Button debounce | 50 ms | `bsp_buttons.c` |
-| Button task | 2 KB stack, priority 3, core 0 | `bsp_buttons.c` |
-| ADC | ADC1_CH3, 12dB attenuation, curve-fitting calibration | `bsp_battery.c` |
-| USB threshold | ≥ 4500 mV (after ×2) | `bsp_battery.c` |
+| Constant           | Value                                                 | Location        |
+|--------------------|-------------------------------------------------------|-----------------|
+| Pixel clock        | 17 MHz                                                | `bsp_display.c` |
+| I80 bus width      | 8 bits                                                | `bsp_display.c` |
+| LVGL buffer size   | `320×170` pixels (full screen)                        | `bsp_display.c` |
+| LVGL double buffer | Yes (PSRAM, ~213 KB total)                            | `bsp_display.c` |
+| LVGL task stack    | 6 KB, priority 2, core 1                              | `bsp_display.c` |
+| I80 max transfer   | Full screen (`320×170×2` bytes)                       | `bsp_display.c` |
+| Button debounce    | 50 ms                                                 | `bsp_buttons.c` |
+| Button task        | 2 KB stack, priority 3, core 0                        | `bsp_buttons.c` |
+| ADC                | ADC1_CH3, 12dB attenuation, curve-fitting calibration | `bsp_battery.c` |
+| USB threshold      | ≥ 4500 mV (after ×2)                                  | `bsp_battery.c` |
 
 ## Usage Example
 
