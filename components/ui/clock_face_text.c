@@ -9,9 +9,27 @@
 // ============================================================
 // Private state
 // ============================================================
-static lv_obj_t *s_time_label = NULL;
-static lv_obj_t *s_date_label = NULL;
-static lv_timer_t *s_clock_timer = NULL;
+static lv_obj_t *s_time_label = nullptr;
+static lv_obj_t *s_date_label = nullptr;
+static lv_timer_t *s_clock_timer = nullptr;
+static lv_timer_t *s_orbit_timer = nullptr;
+static uint8_t s_orbit_step = 0;
+
+// Pixel orbital shift: 2px range, 4 positions, 7-min cycle
+// Prevents LCD image retention on static background regions at screen edges
+static const int8_t ORBIT_X[4] = {0, 2, 2, 0};
+static const int8_t ORBIT_Y[4] = {0, 0, 2, 2};
+
+// ============================================================
+// Orbital shift callback — fires every 7 min, cycles 4 offset positions
+// ============================================================
+static void orbit_timer_cb(lv_timer_t *timer)
+{
+  (void)timer;
+  s_orbit_step = (s_orbit_step + 1) % 4;
+  lv_obj_align(s_time_label, LV_ALIGN_CENTER, ORBIT_X[s_orbit_step], -12 + ORBIT_Y[s_orbit_step]);
+  lv_obj_align_to(s_date_label, s_time_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
+}
 
 // ============================================================
 // Timer callback — runs inside lv_timer_handler() on LVGL task
@@ -22,7 +40,7 @@ static void clock_timer_cb(lv_timer_t *timer)
   char time_buf[16];
   char date_buf[16];
 
-  time_t now = time(NULL);
+  time_t now = time(nullptr);
   struct tm timeinfo;
   localtime_r(&now, &timeinfo);
 
@@ -57,8 +75,12 @@ void clock_face_create(lv_obj_t *parent)
   lv_label_set_text(s_date_label, "--/--/----");
 
   // --- LVGL timer: update every 1 second ---
-  s_clock_timer = lv_timer_create(clock_timer_cb, 1000, NULL);
+  s_clock_timer = lv_timer_create(clock_timer_cb, 1000, nullptr);
   lv_timer_ready(s_clock_timer); // Fire immediately on first tick
+
+  // --- Orbital shift: 7-min period, prevents LCD image retention at screen edges ---
+  s_orbit_step = 0;
+  s_orbit_timer = lv_timer_create(orbit_timer_cb, 7 * 60 * 1000, nullptr);
 }
 
 void clock_face_destroy(void)
@@ -66,8 +88,13 @@ void clock_face_destroy(void)
   if (s_clock_timer)
   {
     lv_timer_delete(s_clock_timer);
-    s_clock_timer = NULL;
+    s_clock_timer = nullptr;
   }
-  s_time_label = NULL;
-  s_date_label = NULL;
+  if (s_orbit_timer)
+  {
+    lv_timer_delete(s_orbit_timer);
+    s_orbit_timer = nullptr;
+  }
+  s_time_label = nullptr;
+  s_date_label = nullptr;
 }
