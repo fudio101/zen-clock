@@ -29,8 +29,13 @@ static screen_state_t s_state = SCR_CLOCK;
 static int s_menu_focus = 0;
 static int s_settings_focus = 0;
 
-// WiFi reset callback (registered by app_handlers)
-static nav_action_cb_t s_reset_wifi_cb = NULL;
+// Action callbacks (registered by app_handlers)
+static nav_action_cb_t s_reset_wifi_cb = nullptr;
+static nav_action_cb_t s_sleep_cb = nullptr;
+
+// Settings item indices for action routing
+#define SETTINGS_IDX_SLEEP_NOW 5
+#define SETTINGS_IDX_RESET_WIFI 6
 
 // ============================================================
 // Screen switching helpers
@@ -59,7 +64,7 @@ static void show_clock_screen(void)
 {
   destroy_current_screen();
 
-  lv_obj_t *scr = lv_obj_create(NULL);
+  lv_obj_t *scr = lv_obj_create(nullptr);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
   clock_face_create(scr);
@@ -79,7 +84,7 @@ static void show_menu_screen(void)
 {
   destroy_current_screen();
 
-  lv_obj_t *scr = lv_obj_create(NULL);
+  lv_obj_t *scr = lv_obj_create(nullptr);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
   status_bar_create(scr);
@@ -99,7 +104,7 @@ static void show_settings_screen(void)
 {
   destroy_current_screen();
 
-  lv_obj_t *scr = lv_obj_create(NULL);
+  lv_obj_t *scr = lv_obj_create(nullptr);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
   status_bar_create(scr);
@@ -131,6 +136,11 @@ void nav_init(void)
 void nav_register_reset_wifi_cb(nav_action_cb_t cb)
 {
   s_reset_wifi_cb = cb;
+}
+
+void nav_register_sleep_cb(nav_action_cb_t cb)
+{
+  s_sleep_cb = cb;
 }
 
 void nav_handle_action(nav_action_t action)
@@ -192,7 +202,8 @@ void nav_handle_action(nav_action_t action)
       s_settings_focus = settings_screen_get_focus();
       if (settings_screen_is_action_item(s_settings_focus))
       {
-        settings_screen_execute_action(s_settings_focus, s_reset_wifi_cb);
+        nav_action_cb_t cb = (s_settings_focus == SETTINGS_IDX_SLEEP_NOW) ? s_sleep_cb : s_reset_wifi_cb;
+        settings_screen_execute_action(s_settings_focus, cb);
       }
       else
       {

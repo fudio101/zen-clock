@@ -8,6 +8,9 @@ static const char *TAG = "Settings";
 static const char *NVS_NAMESPACE = "zenclock";
 static const char *KEY_THEME_LIGHT = "theme_light";
 static const char *KEY_BRIGHTNESS = "brightness";
+static const char *KEY_SLEEP_H = "sleep_h";
+static const char *KEY_SLEEP_M = "sleep_m";
+static const char *KEY_SLEEP_S = "sleep_s";
 
 void settings_init(void)
 {
@@ -142,4 +145,63 @@ void settings_set_brightness(uint8_t percent)
     }
   }
   nvs_close(my_handle);
+}
+
+// --- Sleep timeout helpers (H/M/S) ---
+// Pattern identical to brightness: open READONLY/READWRITE, get/set u8, close.
+
+static uint8_t get_sleep_component(const char *key, uint8_t default_val)
+{
+  nvs_handle_t h;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &h) != ESP_OK)
+    return default_val;
+  uint8_t val = default_val;
+  nvs_get_u8(h, key, &val);
+  nvs_close(h);
+  return val;
+}
+
+static void set_sleep_component(const char *key, uint8_t val, uint8_t max_val)
+{
+  if (val > max_val)
+    val = max_val;
+  nvs_handle_t h;
+  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h);
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Error opening NVS (%s)", esp_err_to_name(err));
+    return;
+  }
+  err = nvs_set_u8(h, key, val);
+  if (err == ESP_OK)
+    nvs_commit(h);
+  else
+    ESP_LOGE(TAG, "Error saving %s (%s)", key, esp_err_to_name(err));
+  nvs_close(h);
+}
+
+uint8_t settings_get_sleep_h(void)
+{
+  return get_sleep_component(KEY_SLEEP_H, 0);
+}
+uint8_t settings_get_sleep_m(void)
+{
+  return get_sleep_component(KEY_SLEEP_M, 0);
+}
+uint8_t settings_get_sleep_s(void)
+{
+  return get_sleep_component(KEY_SLEEP_S, 0);
+}
+
+void settings_set_sleep_h(uint8_t h)
+{
+  set_sleep_component(KEY_SLEEP_H, h, 23);
+}
+void settings_set_sleep_m(uint8_t m)
+{
+  set_sleep_component(KEY_SLEEP_M, m, 59);
+}
+void settings_set_sleep_s(uint8_t s)
+{
+  set_sleep_component(KEY_SLEEP_S, s, 59);
 }

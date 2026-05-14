@@ -41,10 +41,12 @@ ZenClock/
 │   │       ├── bsp_backlight.c # Brightness facade
 │   │       └── bsp_buttons.c  # Button ISR + debounce
 │   ├── lcd_backlight/         # PWM backlight driver (LEDC wrapper)
+│   ├── deep_sleep/            # Deep sleep manager (auto-sleep + manual trigger + ext1 wakeup)
+│   │   └── README.md          # 📖 Deep sleep API & wake behavior docs
 │   ├── settings/              # Persistent configuration via NVS
 │   │   └── README.md          # 📖 Settings architecture & API docs
-│   ├── sntp_sync/             # SNTP time synchronization
-│   │   └── README.md          # 📖 SNTP architecture & API docs
+│   ├── sntp_sync/             # SNTP time synchronization (RTC-backed skip on wake)
+│   │   └── README.md          # 📖 SNTP architecture & deep-sleep wake docs
 │   ├── ui/                    # Hand-written LVGL UI
 │   │   ├── README.md          # 📖 Layout, constraints & widget docs
 │   │   ├── ui.h               # Public API
@@ -76,7 +78,8 @@ ZenClock/
 > **Component docs:** See [`components/bsp/README.md`](components/bsp/README.md), [
 `components/ui/README.md`](components/ui/README.md), [
 `components/sntp_sync/README.md`](components/sntp_sync/README.md), [
-`components/settings/README.md`](components/settings/README.md), and [
+`components/settings/README.md`](components/settings/README.md), [
+`components/deep_sleep/README.md`](components/deep_sleep/README.md), and [
 `components/wifi_manager/README.md`](components/wifi_manager/README.md) for detailed API documentation.
 
 ## Getting Started
@@ -116,20 +119,27 @@ pio device monitor
 
 - **BOOT button (GPIO0)**
     - Short press: Navigate UP (or increase value in edit mode)
-    - Long press: SELECT / Enter (open menu or confirm edit)
+    - Long press: SELECT / Enter (open menu, enter edit mode, or confirm)
 - **Side button (GPIO14)**
     - Short press: Navigate DOWN (or decrease value in edit mode)
     - Long press: BACK / Exit (go back or exit edit mode)
     - Hold 3 seconds (EMERGENCY): Clear WiFi credentials → BLE provisioning
+- **BOOT + IO14 simultaneously (≥ 800ms):** Trigger deep sleep — backlight fades over 1.5s, device enters deep sleep (~
+  6µA). Press either button to wake.
 
 **Navigation Flow:**
 
 ```
-Clock → (any long press) → Menu → (Select) → Settings
-Settings items: Theme, Brightness, Reset WiFi
+Clock → (any long press) → Menu → (SELECT) → Settings
+Settings (7 items, scrollable — 5 visible at a time):
+  Theme, Brightness, Sleep H, Sleep M, Sleep S, Sleep Now, Reset WiFi
 ```
 
-Settings items use inline edit mode — long press to enter, UP/DOWN to change, long press to confirm (auto-saved to NVS).
+TOGGLE/RANGE items use inline edit: SELECT to enter, UP/DOWN to change value (auto-saved to NVS), SELECT or BACK to
+exit.
+ACTION items (Sleep Now, Reset WiFi): SELECT executes immediately.
+
+**Auto-sleep:** Configure via Settings → Sleep H / Sleep M / Sleep S. All three at 0 disables auto-sleep.
 
 Battery status is displayed in the top-right corner.
 

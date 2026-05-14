@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -38,6 +37,39 @@ extern "C"
    * @param percent Brightness 0–100 (clamped if exceeds 100).
    */
   void settings_set_brightness(uint8_t percent);
+
+  /**
+   * @brief Get auto-sleep timeout hours (0–23). Default 0.
+   */
+  uint8_t settings_get_sleep_h(void);
+
+  /**
+   * @brief Store auto-sleep timeout hours to NVS.
+   * @param h Hours 0–23 (clamped if exceeds 23).
+   */
+  void settings_set_sleep_h(uint8_t h);
+
+  /**
+   * @brief Get auto-sleep timeout minutes (0–59). Default 0.
+   */
+  uint8_t settings_get_sleep_m(void);
+
+  /**
+   * @brief Store auto-sleep timeout minutes to NVS.
+   * @param m Minutes 0–59 (clamped if exceeds 59).
+   */
+  void settings_set_sleep_m(uint8_t m);
+
+  /**
+   * @brief Get auto-sleep timeout seconds (0–59). Default 0.
+   */
+  uint8_t settings_get_sleep_s(void);
+
+  /**
+   * @brief Store auto-sleep timeout seconds to NVS.
+   * @param s Seconds 0–59 (clamped if exceeds 59).
+   */
+  void settings_set_sleep_s(uint8_t s);
 
 #ifdef __cplusplus
 }

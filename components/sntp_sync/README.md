@@ -1,88 +1,65 @@
 # SNTP Sync Component
 
-> **[AI Context & Instructions]**
-> To any AI Agent or LLM reading this file:
-> This is a local ESP-IDF component used to manage network time synchronization (SNTP) for the ZenClock project.
-> It abstracts the modern `esp_netif_sntp` API into a thread-safe, non-blocking background task.
->
-> **AI Rules for using this component:**
-> 1. Do NOT use the deprecated `esp_sntp_*` API directly in the application. Use the functions provided by
-     `sntp_sync.h`.
-> 2. This component spawns its own FreeRTOS task to prevent blocking the main thread during network latency.
-> 3. Use the `sntp_sync_cb_t` callback to update UI elements (like status icons) based on sync state transitions.
-
----
-
 ## 1. Overview
 
-This component is designed for ZenClock application developers who need to maintain accurate time synchronization via
-the network. It handles the initial sync and automatic periodic re-synchronization (default: every 1 hour) to combat
+The `sntp_sync` component provides NTP-based time synchronization for the ZenClock firmware running on the ESP32-S3.
+It handles the initial sync and automatic periodic re-synchronization (default: every 1 hour) to combat
 ESP32 RTC drift, using primary (VNIX) and fallback (Pool NTP, Google) servers.
+
+On wake from deep sleep, the component checks `RTC_DATA_ATTR` memory for the last successful sync timestamp.
+If the elapsed time is within the 1-hour resync interval, the initial NTP sync is skipped and `SNTP_EVENT_SYNCED`
+is reported immediately — reducing reconnect latency after short sleep cycles.
 
 ## 2. API Summary
 
-Include the header in your C files:
-
 ```c
-#include "sntp_sync.h"
+// Initialize and start SNTP sync. Call after WiFi is connected.
+esp_err_t sntp_sync_init(sntp_sync_event_cb_t cb);
+
+// Stop SNTP sync and release resources.
+void sntp_sync_deinit(void);
 ```
 
-**Key Data Types:**
+### Events
 
-* `sntp_sync_event_t`: Enum defining the sync states (`SNTP_EVENT_SYNCING`, `SNTP_EVENT_SYNCED`, `SNTP_EVENT_FAILED`).
-* `sntp_sync_cb_t`: Callback function type for state changes `void (*sntp_sync_cb_t)(sntp_sync_event_t event)`.
+| Event               | Description                                                    |
+|---------------------|----------------------------------------------------------------|
+| `SNTP_EVENT_SYNCED` | Time successfully synchronized (or restored from RTC on wake). |
+| `SNTP_EVENT_FAILED` | Sync attempt timed out (30s) with no response from any server. |
 
-**Key Functions:**
+## 2b. Deep Sleep Wake Behavior
 
-* `esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync);`
-    * Starts the non-blocking background task for SNTP synchronization.
-* `bool sntp_sync_is_synced(void);`
-    * Returns `true` if the time has been successfully synchronized.
-* `void sntp_sync_stop(void);`
-    * Stops the SNTP client, kills the background task, and frees resources.
+The last successful sync time is stored in RTC memory (`RTC_DATA_ATTR`) which persists through deep sleep:
 
-## 3. Configuration (Menuconfig)
+| Condition on wake                    | Behavior                                                                                                      |
+|--------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| Last sync < 1 hour ago               | Skip initial NTP sync, report `SNTP_EVENT_SYNCED` immediately. Wait remaining interval then re-sync normally. |
+| Last sync ≥ 1 hour ago or first boot | Perform full initial sync (up to 30s wait).                                                                   |
 
-For fallback servers to work, configure LWIP in ESP-IDF `menuconfig`:
+> **Note:** The ESP32 RTC oscillator keeps running during deep sleep with ~72ms/hr drift. `time(NULL)` post-wake
+> is accurate enough to evaluate the elapsed time correctly.
 
-* `Component config` → `LWIP` → `SNTP`
-* Set **Maximum number of NTP servers** to at least `3`.
+## 3. Configuration
 
-## 4. Usage Example (for AI and Humans)
+| Parameter                | Default            | Description                                    |
+|--------------------------|--------------------|------------------------------------------------|
+| `SNTP_RESYNC_INTERVAL_S` | `3600`             | Seconds between periodic re-syncs.             |
+| `SNTP_SYNC_TIMEOUT_S`    | `30`               | Max seconds to wait for initial sync response. |
+| Primary server           | `time.vnix.gov.vn` | Primary NTP server.                            |
+| Fallback server 1        | `pool.ntp.org`     | First fallback.                                |
+| Fallback server 2        | `time.google.com`  | Second fallback.                               |
+
+## 4. Usage
 
 ```c
-#include "sntp_sync.h"
-#include <esp_log.h>
-
-static const char *TAG = "APP";
-
-// 1. Define a callback to handle state changes
-static void on_sntp_event(sntp_sync_event_t event) {
-    switch (event) {
-        case SNTP_EVENT_SYNCING:
-            ESP_LOGI(TAG, "NTP Syncing...");
-            // Show syncing icon in UI
-            break;
-        case SNTP_EVENT_SYNCED:
-            ESP_LOGI(TAG, "NTP Synced!");
-            // Update clock UI, hide syncing icon
-            break;
-        case SNTP_EVENT_FAILED:
-            ESP_LOGW(TAG, "NTP Sync Failed!");
-            // Show error icon in UI
-            break;
+static void on_sntp_sync(sntp_sync_event_t event) {
+    if (event == SNTP_EVENT_SYNCED) {
+        ESP_LOGI(TAG, "Time synchronized");
     }
 }
 
-void app_main(void) {
-    // Wait for network connection first...
-    
-    // 2. Start the sync process (non-blocking)
-    sntp_sync_start(on_sntp_event);
-
-    // 3. Later, check status if needed before using time
-    if (sntp_sync_is_synced()) {
-        // Safe to read system time
-    }
-}
+// After WiFi connected:
+sntp_sync_init(on_sntp_sync);
 ```
+
+Call `sntp_sync_deinit()` before entering deep sleep or when WiFi is disconnected for an extended period.

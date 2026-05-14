@@ -8,6 +8,7 @@
 
 #include "sntp_sync.h"
 
+#include <esp_attr.h>
 #include <esp_log.h>
 #include <esp_netif_sntp.h>
 #include <esp_sntp.h>
@@ -21,8 +22,11 @@ static const char *TAG = "SNTP";
 #define SNTP_RESYNC_INTERVAL_S 3600 // Re-sync every 1 hour (ESP32 RTC drift ~72ms/hr)
 
 static bool s_synced = false;
-static sntp_sync_cb_t s_on_sync = NULL;
-static TaskHandle_t s_sntp_task = NULL;
+static sntp_sync_cb_t s_on_sync = nullptr;
+static TaskHandle_t s_sntp_task = nullptr;
+
+// Persists through deep sleep; 0 on first power-on
+RTC_DATA_ATTR static time_t s_last_sync_rtc = 0;
 
 // ============================================================
 // Notification callback — fired by SNTP internally on time set
@@ -69,48 +73,70 @@ static bool wait_for_sync(int max_retries)
 // ============================================================
 static void sntp_task(void *arg)
 {
-  // --- Initial sync ---
-  if (s_on_sync)
-  {
-    s_on_sync(SNTP_EVENT_SYNCING);
-  }
-  ESP_LOGI(TAG, "Waiting for NTP time sync...");
+  bool skip_initial = false;
 
-  bool ok = wait_for_sync(15); // 15 × 2s = 30s max wait
-  if (ok)
+  // --- Skip initial sync if waking from deep sleep within the resync interval ---
+  if (s_last_sync_rtc != 0)
   {
-    s_synced = true;
-    log_synced_time();
-  }
-  else
-  {
-    ESP_LOGW(TAG, "NTP sync timeout after 30 seconds");
+    const time_t now = time(nullptr);
+    const time_t elapsed = now - s_last_sync_rtc;
+    if (elapsed >= 0 && elapsed < (time_t)SNTP_RESYNC_INTERVAL_S)
+    {
+      ESP_LOGI(TAG, "Deep sleep wake: last sync %lds ago, skip initial sync", (long)elapsed);
+      s_synced = true;
+      if (s_on_sync)
+        s_on_sync(SNTP_EVENT_SYNCED);
+      // Wait remainder of current interval, then fall into re-sync loop
+      int64_t remain_s = (int64_t)SNTP_RESYNC_INTERVAL_S - (int64_t)elapsed;
+      if (remain_s > 0)
+        vTaskDelay(pdMS_TO_TICKS((uint32_t)(remain_s * 1000)));
+      skip_initial = true;
+    }
   }
 
-  // Fire callback for initial sync result
-  if (s_on_sync)
+  if (!skip_initial)
   {
-    s_on_sync(ok ? SNTP_EVENT_SYNCED : SNTP_EVENT_FAILED);
+    // --- Initial sync ---
+    if (s_on_sync)
+      s_on_sync(SNTP_EVENT_SYNCING);
+    ESP_LOGI(TAG, "Waiting for NTP time sync...");
+
+    bool ok = wait_for_sync(15); // 15 × 2s = 30s max wait
+    if (ok)
+    {
+      s_synced = true;
+      s_last_sync_rtc = time(nullptr);
+      log_synced_time();
+    }
+    else
+    {
+      ESP_LOGW(TAG, "NTP sync timeout after 30 seconds");
+    }
+
+    if (s_on_sync)
+      s_on_sync(ok ? SNTP_EVENT_SYNCED : SNTP_EVENT_FAILED);
   }
 
   // --- Periodic re-sync loop ---
+  // On first iteration after deep sleep wake, skip_initial=true means we already
+  // waited out the remaining interval above, so go straight to re-sync.
   while (1)
   {
-    vTaskDelay(pdMS_TO_TICKS(SNTP_RESYNC_INTERVAL_S * 1000));
+    if (!skip_initial)
+      vTaskDelay(pdMS_TO_TICKS(SNTP_RESYNC_INTERVAL_S * 1000));
+    skip_initial = false;
 
-    // Notify: re-sync starting
     if (s_on_sync)
-    {
       s_on_sync(SNTP_EVENT_SYNCING);
-    }
 
     ESP_LOGI(TAG, "Re-syncing NTP (interval=%ds)...", SNTP_RESYNC_INTERVAL_S);
     esp_sntp_restart();
 
-    ok = wait_for_sync(5); // 5 × 2s = 10s max for re-sync
+    bool ok = wait_for_sync(5); // 5 × 2s = 10s max for re-sync
     if (ok)
     {
       s_synced = true;
+      s_last_sync_rtc = time(nullptr);
       log_synced_time();
     }
     else
@@ -120,9 +146,7 @@ static void sntp_task(void *arg)
     }
 
     if (s_on_sync)
-    {
       s_on_sync(ok ? SNTP_EVENT_SYNCED : SNTP_EVENT_FAILED);
-    }
   }
 }
 
@@ -176,7 +200,7 @@ esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync)
 #endif
 
   // Spawn persistent SNTP task (initial sync + periodic re-sync)
-  BaseType_t xret = xTaskCreate(sntp_task, "sntp_sync", 3072, NULL, 2, &s_sntp_task);
+  BaseType_t xret = xTaskCreate(sntp_task, "sntp_sync", 3072, nullptr, 2, &s_sntp_task);
 
   return (xret == pdPASS) ? ESP_OK : ESP_FAIL;
 }
@@ -192,7 +216,7 @@ void sntp_sync_stop(void)
   if (s_sntp_task)
   {
     vTaskDelete(s_sntp_task);
-    s_sntp_task = NULL;
+    s_sntp_task = nullptr;
   }
 
   esp_netif_sntp_deinit();

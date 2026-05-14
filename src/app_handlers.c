@@ -1,10 +1,12 @@
 #include "app_handlers.h"
 
+#include <driver/gpio.h>
 #include <esp_log.h>
 #include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "bsp.h"
+#include "deep_sleep.h"
 #include "wifi_manager.h"
 #include "sntp_sync.h"
 #include "status_bar.h"
@@ -31,6 +33,11 @@ static void do_reset_wifi(void)
   }
 }
 
+static void do_sleep_now(void)
+{
+  deep_sleep_trigger();
+}
+
 // ============================================================
 // Nav callback registration
 // ============================================================
@@ -38,6 +45,7 @@ static void do_reset_wifi(void)
 void app_handlers_register_nav_callbacks(void)
 {
   nav_register_reset_wifi_cb(do_reset_wifi);
+  nav_register_sleep_cb(do_sleep_now);
 }
 
 // ============================================================
@@ -46,12 +54,26 @@ void app_handlers_register_nav_callbacks(void)
 
 void on_button_press(int btn_id, bsp_btn_event_t event)
 {
+  deep_sleep_reset_timer();
+
   // Emergency: IO14 held ≥ 3s → reset WiFi + BLE provisioning (bypasses nav)
   if (event == BSP_BTN_EMERGENCY && btn_id == BSP_BTN_IO14)
   {
     ESP_LOGW(TAG, "Emergency: resetting WiFi → BLE provisioning");
     do_reset_wifi();
     return;
+  }
+
+  // Simultaneous hold: both buttons long-pressed → deep sleep
+  if (event == BSP_BTN_LONG)
+  {
+    gpio_num_t other = (btn_id == BSP_BTN_BOOT) ? GPIO_NUM_14 : GPIO_NUM_0;
+    if (gpio_get_level(other) == 0) // active-low: 0 = pressed
+    {
+      ESP_LOGI(TAG, "Both buttons held — triggering deep sleep");
+      deep_sleep_trigger();
+      return;
+    }
   }
 
   // Map button + event → nav action

@@ -34,7 +34,8 @@ Built with PlatformIO. The main board config is `sdkconfig.lilygo-t-display-s3`.
 `main.c` is a pure boot orchestrator — no business logic:
 
 ```
-bsp_display_init → settings_init → ui_init(is_light)  [calls nav_init() internally]
+bsp_display_init → settings_init → deep_sleep_init(sleep_s)
+→ ui_init(is_light)  [calls nav_init() internally]
 → bsp_display_set_brightness(brightness_from_nvs, 2000ms)
 → bsp_buttons_init → wifi_manager_init → ble_provisioning_init
 → app_handlers_register_nav_callbacks() → wifi_manager_start
@@ -53,7 +54,7 @@ All event callbacks and nav wiring live here:
 | `on_wifi_event`                         | WiFi manager state machine transitions                                               |
 | `on_ble_prov_event`                     | BLE provisioning lifecycle events                                                    |
 | `on_sntp_sync`                          | NTP sync status updates                                                              |
-| `app_handlers_register_nav_callbacks()` | Wires `do_reset_wifi` into nav system — called once at boot                          |
+| `app_handlers_register_nav_callbacks()` | Wires `do_reset_wifi` and `do_sleep_now` into nav system — called once at boot |
 
 `on_wifi_event` falls back to `ble_provisioning_start()` on `NO_CRED`, `NO_MATCH`, `ALL_FAILED`, and `DISCONNECTED`.
 
@@ -65,8 +66,9 @@ All event callbacks and nav wiring live here:
 | `components/ui/`               | LVGL UI — modular widgets, see below                                             |
 | `components/wifi_manager/`     | WiFi state machine: IDLE → SCANNING → CONNECTING → VERIFYING → CONNECTED         |
 | `components/ble_provisioning/` | BLE WiFi provisioning via `espressif/network_provisioning`                       |
-| `components/settings/`         | NVS-backed settings: light/dark theme + brightness (0–100)                       |
-| `components/sntp_sync/`        | NTP time synchronization with callback                                           |
+| `components/settings/`         | NVS-backed settings: theme, brightness, sleep timeout (H/M/S)                    |
+| `components/sntp_sync/`        | NTP time synchronization; skips initial sync on deep-sleep wake if recently synced |
+| `components/deep_sleep/`       | Auto-sleep timer (inactivity) + manual trigger + ext1 wakeup on GPIO0/GPIO14     |
 | `components/lcd_backlight/`    | LCD backlight driver via LEDC PWM                                                |
 
 ### UI Component (`components/ui/`)
@@ -84,14 +86,15 @@ widgets.
 | `status_bar.c`      | WiFi/NTP/battery icons, internal 30s LVGL timer, reads BSP directly                  |
 | `prov_screen.c`     | QR code overlay shown during BLE provisioning                                        |
 | `menu_screen.c`     | Menu list screen                                                                     |
-| `settings_screen.c` | Settings list with inline edit (Theme, Brightness, Reset WiFi)                       |
+| `settings_screen.c` | Scrollable settings list with inline edit (Theme, Brightness, Sleep H/M/S, Sleep Now, Reset WiFi) |
 
 **Navigation flow:**
 
 ```
-Clock → (any long press) → Menu → (BOOT long) → Settings
-Settings: UP/DOWN navigate, BOOT long = enter edit, IO14 long = back
-Edit mode: UP/DOWN change value (auto-saved to NVS), any long press exits
+Clock → (any long press) → Menu → (SELECT) → Settings
+Settings (7 items, 5 visible, scrollable): UP/DOWN navigate, SELECT = enter edit / execute action, BACK = return to Menu
+Edit mode (TOGGLE/RANGE items): UP/DOWN change value (auto-saved to NVS + applied live), SELECT or BACK exits
+Action items (Sleep Now, Reset WiFi): SELECT executes immediately, no edit mode
 ```
 
 **Nav public API** (`nav.h`):
@@ -99,7 +102,8 @@ Edit mode: UP/DOWN change value (auto-saved to NVS), any long press exits
 ```c
 void nav_init(void);                                  // creates + loads clock screen
 void nav_handle_action(nav_action_t action);          // called by on_button_press
-void nav_register_reset_wifi_cb(nav_action_cb_t cb);  // called by app_handlers_register_nav_callbacks
+void nav_register_reset_wifi_cb(nav_action_cb_t cb);  // wired by app_handlers_register_nav_callbacks
+void nav_register_sleep_cb(nav_action_cb_t cb);       // wired by app_handlers_register_nav_callbacks
 ```
 
 **Nav actions** map to buttons:
@@ -114,10 +118,13 @@ Clock face is swappable: replace `clock_face_text.c` with another implementation
 
 ### Button Actions
 
-| Button        | Single Click    | Double Click (500ms window)                                               |
-|---------------|-----------------|---------------------------------------------------------------------------|
-| BOOT (GPIO0)  | Brightness +10% | Toggle Light/Dark theme                                                   |
-| IO14 (GPIO14) | Brightness −10% | Clear WiFi creds → BLE provisioning (or `esp_restart()` if BLE RAM freed) |
+| Button        | Short press (< 800ms) | Long press (≥ 800ms)                                                      | Emergency hold (≥ 3s) |
+|---------------|----------------------|---------------------------------------------------------------------------|----------------------|
+| BOOT (GPIO0)  | Navigate UP / increase value in edit | SELECT / enter edit mode                          | —                    |
+| IO14 (GPIO14) | Navigate DOWN / decrease value in edit | BACK / exit edit mode                           | Reset WiFi → BLE provisioning (or `esp_restart()` if BLE RAM freed) |
+| BOOT + IO14 simultaneously | — | Trigger deep sleep (backlight fades 1.5s → sleep) | — |
+
+Theme and brightness are now adjusted via the Settings screen (Settings → Theme, Settings → Brightness).
 
 ### WiFi Manager API
 

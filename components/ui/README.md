@@ -44,8 +44,8 @@ touching any header.
 ### `ui.h` — entry point
 
 ```c
-void ui_init(void);           // init LVGL theme, call nav_init()
-void ui_set_theme(bool dark); // switch light/dark theme
+void ui_init(bool is_light);      // init LVGL theme, call nav_init()
+void ui_set_theme(bool is_light); // switch light/dark theme
 ```
 
 ### `nav.h` — navigation
@@ -63,6 +63,7 @@ typedef void (*nav_action_cb_t)(void);
 void nav_init(void);
 void nav_handle_action(nav_action_t action);
 void nav_register_reset_wifi_cb(nav_action_cb_t cb);
+void nav_register_sleep_cb(nav_action_cb_t cb);
 ```
 
 ### `clock_face.h` — clock face widget
@@ -78,7 +79,7 @@ void clock_face_destroy(void);            // stop timer before deleting parent
 void status_bar_create(lv_obj_t *parent);
 void status_bar_destroy(void);
 void status_bar_set_wifi_status(wifi_status_t status); // includes WIFI_STATUS_PROVISIONING
-void status_bar_set_sntp_status(bool synced);
+void status_bar_set_sntp_status(sntp_status_t status);
 ```
 
 Internal 30-second LVGL timer refreshes battery level automatically.
@@ -86,7 +87,7 @@ Internal 30-second LVGL timer refreshes battery level automatically.
 ### `prov_screen.h` — BLE provisioning overlay
 
 ```c
-void prov_screen_show(const char *device_name); // full-screen QR overlay
+void prov_screen_show(const char *device_name, const char *password); // full-screen QR overlay
 void prov_screen_hide(void);                    // remove overlay, reveal clock
 ```
 
@@ -125,15 +126,17 @@ Clock screen
                                                ├─ SELECT:  enter Settings
                                                └─ BACK:    → Clock screen
 
-Settings screen
-  ├─ UP/DOWN: navigate items
-  ├─ SELECT:  enter edit mode (or execute action item)
+Settings screen (7 items: Theme, Brightness, Sleep H/M/S, Sleep Now, Reset WiFi)
+  ├─ UP/DOWN: navigate items (scrollable — 5 visible at a time)
+  ├─ SELECT:  enter edit mode (TOGGLE/RANGE) or execute action (ACTION items)
   └─ BACK:    → Menu screen
 
-Settings edit mode (non-action items)
-  ├─ UP/DOWN: change value (auto-saved to NVS)
+Settings edit mode (TOGGLE/RANGE items only)
+  ├─ UP/DOWN: change value (auto-saved to NVS + applied live)
   ├─ SELECT:  exit edit mode
   └─ BACK:    exit edit mode
+
+Action items (Sleep Now, Reset WiFi): SELECT fires callback, no edit mode
 ```
 
 ## Key Constraints

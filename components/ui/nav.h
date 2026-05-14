@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <stdbool.h>
-
 #ifdef __cplusplus
 extern "C"
 {
@@ -33,10 +31,16 @@ extern "C"
   void nav_handle_action(nav_action_t action);
 
   /**
-   * @brief Register callback for "Reset WiFi" action.
-   * Called by app_handlers to keep ui component decoupled from wifi/ble.
+   * @brief Register callback for "Reset Wi-Fi" action.
+   * Called by app_handlers to keep ui component decoupled from wi-fi/ble.
    */
   void nav_register_reset_wifi_cb(nav_action_cb_t cb);
+
+  /**
+   * @brief Register callback for "Sleep Now" action.
+   * Called by app_handlers to keep ui component decoupled from deep_sleep.
+   */
+  void nav_register_sleep_cb(nav_action_cb_t cb);
 
 #ifdef __cplusplus
 }

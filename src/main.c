@@ -2,6 +2,7 @@
 #include <time.h>
 #include <esp_log.h>
 #include "bsp.h"
+#include "deep_sleep.h"
 #include "ui.h"
 #include "wifi_manager.h"
 #include "settings.h"
@@ -20,8 +21,13 @@ void app_main(void)
 
   // Initialize NVS and load settings
   settings_init();
-  bool is_light = settings_get_theme_light();
-  uint8_t brightness = settings_get_brightness();
+  const bool is_light = settings_get_theme_light();
+  const uint8_t brightness = settings_get_brightness();
+
+  // Initialize deep sleep (auto-sleep timer + wakeup sources)
+  const uint32_t sleep_s = (uint32_t)settings_get_sleep_h() * 3600 + (uint32_t)settings_get_sleep_m() * 60 +
+                           (uint32_t)settings_get_sleep_s();
+  deep_sleep_init(sleep_s);
 
   // Initialize UI (self-contained: creates all widgets + timers)
   lvgl_port_lock(0);
@@ -34,7 +40,7 @@ void app_main(void)
   // Initialize buttons for brightness control
   bsp_buttons_init(on_button_press);
 
-  // WiFi + BLE provisioning init (BLE fires first on no-credential boot)
+  // Wi-Fi + BLE provisioning init (BLE fires first on no-credential boot)
   wifi_manager_init();
   wifi_manager_set_callback(on_wifi_event);
   ble_provisioning_init(on_ble_prov_event);
