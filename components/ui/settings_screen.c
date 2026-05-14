@@ -80,10 +80,10 @@ static int s_focus = 0;
 static int s_scroll = 0; // index of first visible item
 static bool s_editing = false;
 
-static lv_obj_t *s_name_labels[SETTINGS_ITEM_COUNT] = {nullptr};
-static lv_obj_t *s_value_labels[SETTINGS_ITEM_COUNT] = {nullptr};
-static lv_obj_t *s_focus_marker = nullptr;
-static lv_obj_t *s_edit_box = nullptr;
+static lv_obj_t *s_name_labels[SETTINGS_ITEM_COUNT] = {NULL};
+static lv_obj_t *s_value_labels[SETTINGS_ITEM_COUNT] = {NULL};
+static lv_obj_t *s_focus_marker = NULL;
+static lv_obj_t *s_edit_box = NULL;
 
 // ============================================================
 // Scroll helper — reposition all labels according to s_scroll
@@ -200,7 +200,7 @@ static void show_edit_box(int index)
   if (s_edit_box)
   {
     lv_obj_delete(s_edit_box);
-    s_edit_box = nullptr;
+    s_edit_box = NULL;
   }
 
   lv_obj_t *parent = lv_obj_get_parent(s_value_labels[index]);
@@ -222,7 +222,7 @@ static void hide_edit_box(void)
   if (s_edit_box)
   {
     lv_obj_delete(s_edit_box);
-    s_edit_box = nullptr;
+    s_edit_box = NULL;
   }
 }
 
@@ -276,7 +276,7 @@ void settings_screen_create(lv_obj_t *parent)
   s_focus = 0;
   s_scroll = 0;
   s_editing = false;
-  s_edit_box = nullptr;
+  s_edit_box = NULL;
 
   // Load current values from NVS
   s_items[0].value = settings_get_theme_light() ? 1 : 0;
@@ -317,7 +317,7 @@ void settings_screen_create(lv_obj_t *parent)
     }
     else
     {
-      s_value_labels[i] = nullptr;
+      s_value_labels[i] = NULL;
     }
   }
 

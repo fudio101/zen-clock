@@ -22,8 +22,8 @@ static const char *TAG = "SNTP";
 #define SNTP_RESYNC_INTERVAL_S 3600 // Re-sync every 1 hour (ESP32 RTC drift ~72ms/hr)
 
 static bool s_synced = false;
-static sntp_sync_cb_t s_on_sync = nullptr;
-static TaskHandle_t s_sntp_task = nullptr;
+static sntp_sync_cb_t s_on_sync = NULL;
+static TaskHandle_t s_sntp_task = NULL;
 
 // Persists through deep sleep; 0 on first power-on
 RTC_DATA_ATTR static time_t s_last_sync_rtc = 0;
@@ -78,7 +78,7 @@ static void sntp_task(void *arg)
   // --- Skip initial sync if waking from deep sleep within the resync interval ---
   if (s_last_sync_rtc != 0)
   {
-    const time_t now = time(nullptr);
+    const time_t now = time(NULL);
     const time_t elapsed = now - s_last_sync_rtc;
     if (elapsed >= 0 && elapsed < (time_t)SNTP_RESYNC_INTERVAL_S)
     {
@@ -105,7 +105,7 @@ static void sntp_task(void *arg)
     if (ok)
     {
       s_synced = true;
-      s_last_sync_rtc = time(nullptr);
+      s_last_sync_rtc = time(NULL);
       log_synced_time();
     }
     else
@@ -136,7 +136,7 @@ static void sntp_task(void *arg)
     if (ok)
     {
       s_synced = true;
-      s_last_sync_rtc = time(nullptr);
+      s_last_sync_rtc = time(NULL);
       log_synced_time();
     }
     else
@@ -200,7 +200,7 @@ esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync)
 #endif
 
   // Spawn persistent SNTP task (initial sync + periodic re-sync)
-  BaseType_t xret = xTaskCreate(sntp_task, "sntp_sync", 3072, nullptr, 2, &s_sntp_task);
+  BaseType_t xret = xTaskCreate(sntp_task, "sntp_sync", 3072, NULL, 2, &s_sntp_task);
 
   return (xret == pdPASS) ? ESP_OK : ESP_FAIL;
 }
@@ -216,7 +216,7 @@ void sntp_sync_stop(void)
   if (s_sntp_task)
   {
     vTaskDelete(s_sntp_task);
-    s_sntp_task = nullptr;
+    s_sntp_task = NULL;
   }
 
   esp_netif_sntp_deinit();

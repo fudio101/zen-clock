@@ -19,7 +19,7 @@
 #define TEXT_X_START (QR_X_PAD + QR_SIZE + TEXT_X_PAD)
 #define TEXT_WIDTH (320 - TEXT_X_START - 8)
 
-static lv_obj_t *s_overlay = nullptr;
+static lv_obj_t *s_overlay = NULL;
 
 void prov_screen_show(const char *device_name, const char *password)
 {

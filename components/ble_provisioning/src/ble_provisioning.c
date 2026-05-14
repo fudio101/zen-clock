@@ -35,14 +35,14 @@ static const char *TAG = "BLEProv";
 #define SEC2_USERNAME_LEN 8
 #define SEC2_SALT_LEN 16
 
-static ble_prov_cb_t s_callback = nullptr;
+static ble_prov_cb_t s_callback = NULL;
 static bool s_active = false;
 static bool s_mem_freed = false;
 
 // SRP6a credentials — heap-alloc'd in ble_provisioning_start(), freed on PROV_END
 static char s_sec2_password[9]; // 8 hex chars from MAC + NUL
-static char *s_sec2_salt = nullptr;
-static char *s_sec2_verifier = nullptr;
+static char *s_sec2_salt = NULL;
+static char *s_sec2_verifier = NULL;
 static int s_sec2_verifier_len = 0;
 
 // ============================================================
@@ -67,8 +67,8 @@ static void free_sec2_credentials(void)
 {
   free(s_sec2_salt);
   free(s_sec2_verifier);
-  s_sec2_salt = nullptr;
-  s_sec2_verifier = nullptr;
+  s_sec2_salt = NULL;
+  s_sec2_verifier = NULL;
   s_sec2_verifier_len = 0;
 }
 
@@ -89,7 +89,7 @@ static void prov_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     ESP_LOGI(TAG, "BLE advertisement started");
     s_active = true;
     if (s_callback)
-      s_callback(BLE_PROV_STARTED, nullptr, nullptr);
+      s_callback(BLE_PROV_STARTED, NULL, NULL);
     break;
 
   case NETWORK_PROV_WIFI_CRED_RECV:
@@ -112,7 +112,7 @@ static void prov_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     network_prov_wifi_sta_fail_reason_t *reason = (network_prov_wifi_sta_fail_reason_t *)data;
     ESP_LOGW(TAG, "Credential verification failed (reason=%d)", reason ? (int)*reason : -1);
     if (s_callback)
-      s_callback(BLE_PROV_FAILED, nullptr, nullptr);
+      s_callback(BLE_PROV_FAILED, NULL, NULL);
     break;
   }
 
@@ -121,7 +121,7 @@ static void prov_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     s_active = false;
     free_sec2_credentials();
     if (s_callback)
-      s_callback(BLE_PROV_SUCCESS, nullptr, nullptr);
+      s_callback(BLE_PROV_SUCCESS, NULL, NULL);
     break;
 
   default:
@@ -137,7 +137,7 @@ esp_err_t ble_provisioning_init(ble_prov_cb_t callback)
 {
   s_callback = callback;
 
-  esp_err_t ret = esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, prov_event_handler, nullptr);
+  esp_err_t ret = esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, prov_event_handler, NULL);
 
   if (ret != ESP_OK)
   {
@@ -190,7 +190,7 @@ esp_err_t ble_provisioning_start(void)
       .verifier_len = (uint16_t)s_sec2_verifier_len,
   };
 
-  ret = network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_2, (const void *)&sec2_params, device_name, nullptr);
+  ret = network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_2, (const void *)&sec2_params, device_name, NULL);
   if (ret != ESP_OK)
   {
     ESP_LOGE(TAG, "network_prov_mgr_start_provisioning failed: %s", esp_err_to_name(ret));

@@ -14,8 +14,8 @@ static const char *TAG = "deep_sleep";
 // Wake on either button press (active-low)
 #define WAKEUP_PIN_MASK ((1ULL << PIN_BTN_BOOT) | (1ULL << PIN_BTN_IO14))
 
-static esp_timer_handle_t s_timer = nullptr;
-static TaskHandle_t s_task = nullptr;
+static esp_timer_handle_t s_timer = NULL;
+static TaskHandle_t s_task = NULL;
 static uint64_t s_timeout_us = 0;
 
 static void sleep_task_fn(void *arg)
@@ -42,12 +42,12 @@ static void inactivity_cb(void *arg)
 
 void deep_sleep_init(uint32_t timeout_s)
 {
-  xTaskCreate(sleep_task_fn, "deep_sleep", 2048, nullptr, 4, &s_task);
+  xTaskCreate(sleep_task_fn, "deep_sleep", 2048, NULL, 4, &s_task);
 
   const esp_timer_create_args_t args = {
       .callback = inactivity_cb,
       .name = "sleep_tmr",
-      .arg = nullptr,
+      .arg = NULL,
       .dispatch_method = ESP_TIMER_TASK,
   };
   esp_timer_create(&args, &s_timer);

@@ -36,12 +36,12 @@ static const char *TAG = "WiFiMgr";
 // ============================================================
 // Module state
 // ============================================================
-static EventGroupHandle_t s_event_group = nullptr;
-static SemaphoreHandle_t s_mutex = nullptr;
-static TaskHandle_t s_task_handle = nullptr;
-static wifi_event_cb_t s_callback = nullptr;
+static EventGroupHandle_t s_event_group = NULL;
+static SemaphoreHandle_t s_mutex = NULL;
+static TaskHandle_t s_task_handle = NULL;
+static wifi_event_cb_t s_callback = NULL;
 static wifi_state_t s_state = WIFI_ST_IDLE;
-static esp_netif_t *s_sta_netif = nullptr;
+static esp_netif_t *s_sta_netif = NULL;
 
 static char s_ssid[SSID_MAX_LEN] = {0};
 static char s_pass[PASS_MAX_LEN] = {0};
@@ -51,7 +51,7 @@ static char s_connected_ssid[SSID_MAX_LEN] = {0};
 static wifi_ap_record_t s_match_ap;
 
 // AP list buffer — allocated once in wifi_task, reused across scans
-static wifi_ap_record_t *s_ap_list = nullptr;
+static wifi_ap_record_t *s_ap_list = NULL;
 
 // ============================================================
 // State helpers (thread-safe)
@@ -186,7 +186,7 @@ static int do_fast_scan(wifi_ap_record_t *out, int max_aps, const uint8_t *bssid
   wifi_ap_record_t *records = calloc(ap_count, sizeof(wifi_ap_record_t));
   if (!records)
   {
-    esp_wifi_scan_get_ap_records(&ap_count, nullptr);
+    esp_wifi_scan_get_ap_records(&ap_count, NULL);
     return 0;
   }
   esp_wifi_scan_get_ap_records(&ap_count, records);
@@ -242,7 +242,7 @@ static int do_aggregated_scan(wifi_ap_record_t *merged, int max_aps)
     if (!round_aps)
     {
       ESP_LOGW(TAG, "  Failed to allocate round buffer, skipping");
-      esp_wifi_scan_get_ap_records(&ap_count, nullptr);
+      esp_wifi_scan_get_ap_records(&ap_count, NULL);
       continue;
     }
     esp_wifi_scan_get_ap_records(&ap_count, round_aps);
@@ -367,9 +367,9 @@ static bool do_dns_probe(void)
     }
 
     struct addrinfo hints = {.ai_family = AF_INET};
-    struct addrinfo *res = nullptr;
+    struct addrinfo *res = NULL;
     int err = getaddrinfo(DNS_PROBE_HOST, "123", &hints, &res);
-    if (err == 0 && res != nullptr)
+    if (err == 0 && res != NULL)
     {
       freeaddrinfo(res);
       ESP_LOGI(TAG, "DNS probe OK (attempt %d/%d)", probe + 1, DNS_PROBE_MAX);
@@ -619,18 +619,16 @@ esp_err_t wifi_manager_init(void)
   s_mutex = xSemaphoreCreateMutex();
 
   // Event handlers — bits only
-  ESP_ERROR_CHECK(
-      esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, nullptr, nullptr));
-  ESP_ERROR_CHECK(
-      esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, nullptr, nullptr));
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
 
   // Station mode
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
   // Create persistent task (starts in IDLE, waits for notification)
   BaseType_t xret = xTaskCreatePinnedToCore(wifi_task, "wifi_mgr",
-                                            4096 * 2,   // 8KB stack
-                                            nullptr, 3, // Priority 3
+                                            4096 * 2, // 8KB stack
+                                            NULL, 3,  // Priority 3
                                             &s_task_handle,
                                             0); // Pin to core 0 (WiFi core)
 
@@ -681,5 +679,5 @@ wifi_state_t wifi_manager_get_state(void)
 
 const char *wifi_manager_get_ssid(void)
 {
-  return s_connected_ssid[0] ? s_connected_ssid : nullptr;
+  return s_connected_ssid[0] ? s_connected_ssid : NULL;
 }

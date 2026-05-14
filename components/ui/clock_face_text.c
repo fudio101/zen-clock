@@ -9,10 +9,10 @@
 // ============================================================
 // Private state
 // ============================================================
-static lv_obj_t *s_time_label = nullptr;
-static lv_obj_t *s_date_label = nullptr;
-static lv_timer_t *s_clock_timer = nullptr;
-static lv_timer_t *s_orbit_timer = nullptr;
+static lv_obj_t *s_time_label = NULL;
+static lv_obj_t *s_date_label = NULL;
+static lv_timer_t *s_clock_timer = NULL;
+static lv_timer_t *s_orbit_timer = NULL;
 static uint8_t s_orbit_step = 0;
 
 // Pixel orbital shift: 2px range, 4 positions, 7-min cycle
@@ -40,7 +40,7 @@ static void clock_timer_cb(lv_timer_t *timer)
   char time_buf[16];
   char date_buf[16];
 
-  time_t now = time(nullptr);
+  time_t now = time(NULL);
   struct tm timeinfo;
   localtime_r(&now, &timeinfo);
 
@@ -75,12 +75,12 @@ void clock_face_create(lv_obj_t *parent)
   lv_label_set_text(s_date_label, "--/--/----");
 
   // --- LVGL timer: update every 1 second ---
-  s_clock_timer = lv_timer_create(clock_timer_cb, 1000, nullptr);
+  s_clock_timer = lv_timer_create(clock_timer_cb, 1000, NULL);
   lv_timer_ready(s_clock_timer); // Fire immediately on first tick
 
   // --- Orbital shift: 7-min period, prevents LCD image retention at screen edges ---
   s_orbit_step = 0;
-  s_orbit_timer = lv_timer_create(orbit_timer_cb, 7 * 60 * 1000, nullptr);
+  s_orbit_timer = lv_timer_create(orbit_timer_cb, 7 * 60 * 1000, NULL);
 }
 
 void clock_face_destroy(void)
@@ -88,13 +88,13 @@ void clock_face_destroy(void)
   if (s_clock_timer)
   {
     lv_timer_delete(s_clock_timer);
-    s_clock_timer = nullptr;
+    s_clock_timer = NULL;
   }
   if (s_orbit_timer)
   {
     lv_timer_delete(s_orbit_timer);
-    s_orbit_timer = nullptr;
+    s_orbit_timer = NULL;
   }
-  s_time_label = nullptr;
-  s_date_label = nullptr;
+  s_time_label = NULL;
+  s_date_label = NULL;
 }

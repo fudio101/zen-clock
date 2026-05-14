@@ -30,8 +30,8 @@ static int s_menu_focus = 0;
 static int s_settings_focus = 0;
 
 // Action callbacks (registered by app_handlers)
-static nav_action_cb_t s_reset_wifi_cb = nullptr;
-static nav_action_cb_t s_sleep_cb = nullptr;
+static nav_action_cb_t s_reset_wifi_cb = NULL;
+static nav_action_cb_t s_sleep_cb = NULL;
 
 // Settings item indices for action routing
 #define SETTINGS_IDX_SLEEP_NOW 5
@@ -64,7 +64,7 @@ static void show_clock_screen(void)
 {
   destroy_current_screen();
 
-  lv_obj_t *scr = lv_obj_create(nullptr);
+  lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
   clock_face_create(scr);
@@ -84,7 +84,7 @@ static void show_menu_screen(void)
 {
   destroy_current_screen();
 
-  lv_obj_t *scr = lv_obj_create(nullptr);
+  lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
   status_bar_create(scr);
@@ -104,7 +104,7 @@ static void show_settings_screen(void)
 {
   destroy_current_screen();
 
-  lv_obj_t *scr = lv_obj_create(nullptr);
+  lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
   status_bar_create(scr);
