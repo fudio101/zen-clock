@@ -115,6 +115,12 @@ pio device monitor
    scan the QR code, enter the displayed password when prompted (Security 2 / SRP6a), then select your WiFi network
 5. Once connected, provisioning screen closes and clock displays time (synced via SNTP)
 
+**Offline operation (credentials already set):**
+
+If WiFi credentials are stored but the network is unavailable at boot, the device starts normally in offline mode —
+clock shows time from RTC, no BLE QR code appears. WiFi reconnects automatically with exponential backoff (30 s → 60
+s → … → 5 min max). NTP syncs immediately once connection is restored.
+
 **Button Controls:**
 
 - **BOOT button (GPIO0)**

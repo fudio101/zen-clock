@@ -9,8 +9,6 @@ extern "C"
 #endif
 
 #include "esp_err.h"
-#include <stdbool.h>
-#include <stdint.h>
 
 // Default NTP server (Vietnam)
 // Alternatives: "2.ntp.vnix.vn", "vn.pool.ntp.org", "pool.ntp.org", "time.google.com"
@@ -52,6 +50,15 @@ extern "C"
    * @brief Stop SNTP client and free resources.
    */
   void sntp_sync_stop(void);
+
+  /**
+   * @brief Notify SNTP that WiFi just reconnected.
+   *
+   * If last sync is stale (>1h) or has never occurred, wakes the
+   * periodic-resync task immediately instead of waiting for the
+   * next scheduled interval. Safe to call multiple times.
+   */
+  void sntp_sync_notify_connected(void);
 
 #ifdef __cplusplus
 }

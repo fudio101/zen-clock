@@ -171,17 +171,17 @@ typedef void (*wifi_mgr_callback_t)(wifi_mgr_event_t event);
 
 WiFi Manager fires events via the callback when state changes:
 
-| Event                   | When                                                    | Expected Action                                             |
-|-------------------------|---------------------------------------------------------|-------------------------------------------------------------|
-| `WIFI_MGR_SCANNING`     | Scan started                                            | Update UI: show "Scanning..."                               |
-| `WIFI_MGR_CONNECTING`   | Attempting to connect to matched SSID                   | Update UI: show "Connecting to [SSID]..."                   |
-| `WIFI_MGR_GOT_IP`       | Got IP address via DHCP                                 | (Internal: DNS probe in progress)                           |
-| `WIFI_MGR_CONNECTED`    | DNS probe successful, internet verified                 | Update UI: show WiFi icon, enable time display              |
-| `WIFI_MGR_DISCONNECTED` | Lost WiFi connection                                    | Update UI: show disconnected state                          |
-| `WIFI_MGR_NO_CRED`      | No credentials stored in NVS at start                   | Call `ble_provisioning_start()` to enter setup mode         |
-| `WIFI_MGR_NO_MATCH`     | Stored SSID not found in scan results                   | Call `wifi_manager_stop()`, then `ble_provisioning_start()` |
-| `WIFI_MGR_ALL_FAILED`   | Connection attempt failed (bad password, timeout, etc.) | Call `wifi_manager_stop()`, then `ble_provisioning_start()` |
-| `WIFI_MGR_SCAN_DONE`    | Scan complete (informational)                           | (Generally not used in UI)                                  |
+| Event                   | When                                                    | Expected Action                                                 |
+|-------------------------|---------------------------------------------------------|-----------------------------------------------------------------|
+| `WIFI_MGR_SCANNING`     | Scan started                                            | Update UI: show "Scanning..."                                   |
+| `WIFI_MGR_CONNECTING`   | Attempting to connect to matched SSID                   | Update UI: show "Connecting to [SSID]..."                       |
+| `WIFI_MGR_GOT_IP`       | Got IP address via DHCP                                 | (Internal: DNS probe in progress)                               |
+| `WIFI_MGR_CONNECTED`    | DNS probe successful, internet verified                 | Update UI: show WiFi icon, enable time display                  |
+| `WIFI_MGR_DISCONNECTED` | Lost WiFi connection while connected                    | Update UI to disconnected, schedule auto-reconnect with backoff |
+| `WIFI_MGR_NO_CRED`      | No credentials stored in NVS at start                   | Call `ble_provisioning_start()` to enter setup mode             |
+| `WIFI_MGR_NO_MATCH`     | Stored SSID not found in scan results                   | Update UI to disconnected, schedule auto-reconnect with backoff |
+| `WIFI_MGR_ALL_FAILED`   | Connection attempt failed (bad password, timeout, etc.) | Update UI to disconnected, schedule auto-reconnect with backoff |
+| `WIFI_MGR_SCAN_DONE`    | Scan complete (informational)                           | (Generally not used in UI)                                      |
 
 ## Integration & Rules
 
@@ -195,9 +195,10 @@ WiFi Manager fires events via the callback when state changes:
    ```
 
 2. **Handle failure events:**
-    - On `WIFI_MGR_NO_CRED`, `WIFI_MGR_NO_MATCH`, `WIFI_MGR_ALL_FAILED`, `WIFI_MGR_DISCONNECTED`
-    - Call `wifi_manager_stop()` to disconnect WiFi cleanly
-    - Then call `ble_provisioning_start()` to enter provisioning mode
+    - `WIFI_MGR_NO_CRED` (no credentials): call `wifi_manager_stop()` + `ble_provisioning_start()`
+    - `WIFI_MGR_DISCONNECTED`, `WIFI_MGR_NO_MATCH`, `WIFI_MGR_ALL_FAILED` (has credentials): update UI to
+      disconnected and schedule a reconnect timer — device operates offline, retries with exponential backoff
+      (30 s → 60 s → … → 300 s max). **Do not start BLE provisioning** for these events.
 
 3. **Lock UI updates in callback:**
    ```c
@@ -220,13 +221,15 @@ WiFi Manager depends on:
 
 ### Network Provisioning Integration
 
-When WiFi needs credentials (no match, connection failed, user reset):
+BLE provisioning is only started when the device has **no credentials** (`WIFI_MGR_NO_CRED`):
 
-1. Caller receives failure event in callback
-2. Caller calls `wifi_manager_stop()` to disconnect WiFi
-3. Caller calls `ble_provisioning_start()` to enter BLE setup mode
-4. BLE provisioning listens for user input, calls `wifi_manager_set_credential()` when ready
-5. Caller receives `WIFI_MGR_SET_CREDENTIAL` callback or similar, then calls `wifi_manager_start()` again
+1. Caller receives `WIFI_MGR_NO_CRED` event
+2. Caller calls `wifi_manager_stop()` + `ble_provisioning_start()`
+3. BLE provisioning receives credentials, calls `wifi_manager_set_credential()`
+4. On `BLE_PROV_SUCCESS`, caller calls `wifi_manager_start()` to connect with new credentials
+
+For all other failures (`DISCONNECTED`, `NO_MATCH`, `ALL_FAILED`) when credentials **exist**, the caller
+schedules an auto-reconnect via `wifi_manager_start()` with exponential backoff. BLE is not involved.
 
 **Critical:** Stop WiFi before starting BLE provisioning to avoid driver conflicts.
 
@@ -276,9 +279,10 @@ WiFi Manager is designed for real hardware (ESP32-S3) and WiFi networks. Test sc
 
 1. **First boot, no credentials** → IDLE fires NO_CRED → BLE provisioning
 2. **Credentials set, network found** → SCANNING → CONNECTING → VERIFYING → CONNECTED
-3. **Credentials set, network not found** → SCANNING → NO_MATCH → caller starts provisioning
-4. **Connection fails (bad password)** → CONNECTING fails → ALL_FAILED → caller starts provisioning
-5. **WiFi disconnected** → CONNECTED → DISCONNECTED → caller decides (retry or provision)
+3. **Credentials set, network not found** → SCANNING → NO_MATCH → caller schedules reconnect (no BLE)
+4. **Connection fails** → CONNECTING fails → ALL_FAILED → caller schedules reconnect (no BLE)
+5. **WiFi drops while in use** → CONNECTED → DISCONNECTED → caller schedules reconnect (no BLE)
+6. **Reconnect succeeds** → `wifi_manager_start()` fires again → SCANNING → CONNECTED
 
 ## Related Components
 

@@ -13,6 +13,7 @@
 #include <esp_netif_sntp.h>
 #include <esp_sntp.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/event_groups.h>
 #include <freertos/task.h>
 #include <time.h>
 #include <sys/time.h>
@@ -24,6 +25,8 @@ static const char *TAG = "SNTP";
 static bool s_synced = false;
 static sntp_sync_cb_t s_on_sync = NULL;
 static TaskHandle_t s_sntp_task = NULL;
+static EventGroupHandle_t s_eg = NULL;
+#define SNTP_BIT_RESYNC ((EventBits_t)(1 << 0))
 
 // Persists through deep sleep; 0 on first power-on
 RTC_DATA_ATTR static time_t s_last_sync_rtc = 0;
@@ -89,7 +92,7 @@ static void sntp_task(void *arg)
       // Wait remainder of current interval, then fall into re-sync loop
       int64_t remain_s = (int64_t)SNTP_RESYNC_INTERVAL_S - (int64_t)elapsed;
       if (remain_s > 0)
-        vTaskDelay(pdMS_TO_TICKS((uint32_t)(remain_s * 1000)));
+        xEventGroupWaitBits(s_eg, SNTP_BIT_RESYNC, pdTRUE, pdFALSE, pdMS_TO_TICKS((uint32_t)(remain_s * 1000)));
       skip_initial = true;
     }
   }
@@ -123,7 +126,7 @@ static void sntp_task(void *arg)
   while (1)
   {
     if (!skip_initial)
-      vTaskDelay(pdMS_TO_TICKS(SNTP_RESYNC_INTERVAL_S * 1000));
+      xEventGroupWaitBits(s_eg, SNTP_BIT_RESYNC, pdTRUE, pdFALSE, pdMS_TO_TICKS(SNTP_RESYNC_INTERVAL_S * 1000));
     skip_initial = false;
 
     if (s_on_sync)
@@ -199,10 +202,24 @@ esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync)
   ESP_LOGW(TAG, "Only 1 NTP server slot! Set CONFIG_LWIP_SNTP_MAX_SERVERS=3 in menuconfig");
 #endif
 
+  s_eg = xEventGroupCreate();
+
   // Spawn persistent SNTP task (initial sync + periodic re-sync)
   BaseType_t xret = xTaskCreate(sntp_task, "sntp_sync", 3072, NULL, 2, &s_sntp_task);
 
   return (xret == pdPASS) ? ESP_OK : ESP_FAIL;
+}
+
+void sntp_sync_notify_connected(void)
+{
+  if (!s_eg || !s_sntp_task)
+    return;
+  const time_t now = time(NULL);
+  if (s_last_sync_rtc == 0 || difftime(now, s_last_sync_rtc) >= SNTP_RESYNC_INTERVAL_S)
+  {
+    ESP_LOGI(TAG, "WiFi reconnected — waking SNTP for immediate resync");
+    xEventGroupSetBits(s_eg, SNTP_BIT_RESYNC);
+  }
 }
 
 bool sntp_sync_is_synced(void)
@@ -217,6 +234,12 @@ void sntp_sync_stop(void)
   {
     vTaskDelete(s_sntp_task);
     s_sntp_task = NULL;
+  }
+
+  if (s_eg)
+  {
+    vEventGroupDelete(s_eg);
+    s_eg = NULL;
   }
 
   esp_netif_sntp_deinit();

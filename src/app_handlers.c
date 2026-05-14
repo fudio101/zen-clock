@@ -3,6 +3,7 @@
 #include <driver/gpio.h>
 #include <esp_log.h>
 #include <esp_system.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "bsp.h"
@@ -15,6 +16,38 @@
 #include "nav.h"
 
 static const char *TAG = "ZenClock";
+
+// ============================================================
+// WiFi reconnect — exponential backoff timer
+// ============================================================
+
+static esp_timer_handle_t s_reconnect_timer = NULL;
+static int s_reconnect_backoff_s = 30;
+static bool s_sntp_started = false;
+
+static void reconnect_timer_cb(void *arg)
+{
+  wifi_manager_start();
+}
+
+static void schedule_reconnect(void)
+{
+  if (!s_reconnect_timer)
+  {
+    const esp_timer_create_args_t args = {.callback = reconnect_timer_cb, .name = "wifi_rc"};
+    esp_timer_create(&args, &s_reconnect_timer);
+  }
+  esp_timer_start_once(s_reconnect_timer, (uint64_t)s_reconnect_backoff_s * 1000000ULL);
+  ESP_LOGI(TAG, "WiFi offline — retry in %ds", s_reconnect_backoff_s);
+  s_reconnect_backoff_s = (s_reconnect_backoff_s * 2 > 300) ? 300 : s_reconnect_backoff_s * 2;
+}
+
+static void cancel_reconnect(void)
+{
+  if (s_reconnect_timer)
+    esp_timer_stop(s_reconnect_timer);
+  s_reconnect_backoff_s = 30;
+}
 
 // ============================================================
 // Wi-Fi reset action (shared by emergency button + nav settings)
@@ -198,11 +231,21 @@ void on_wifi_event(wifi_manager_event_t event)
     break;
 
   case WIFI_MGR_CONNECTED:
-    ESP_LOGI(TAG, "WiFi verified online — starting NTP sync...");
+    cancel_reconnect();
     lvgl_port_lock(0);
     status_bar_set_wifi_status(WIFI_STATUS_CONNECTED);
     lvgl_port_unlock();
-    sntp_sync_start(on_sntp_sync);
+    if (!s_sntp_started)
+    {
+      ESP_LOGI(TAG, "WiFi verified online — starting NTP sync...");
+      sntp_sync_start(on_sntp_sync);
+      s_sntp_started = true;
+    }
+    else
+    {
+      ESP_LOGI(TAG, "WiFi reconnected — notifying SNTP");
+      sntp_sync_notify_connected();
+    }
     break;
 
   case WIFI_MGR_SCAN_DONE:
@@ -221,12 +264,11 @@ void on_wifi_event(wifi_manager_event_t event)
   case WIFI_MGR_DISCONNECTED:
   case WIFI_MGR_NO_MATCH:
   case WIFI_MGR_ALL_FAILED:
-    ESP_LOGW(TAG, "WiFi unavailable (event=%d) — starting BLE provisioning", (int)event);
-    wifi_manager_stop();
+    ESP_LOGW(TAG, "WiFi unavailable (event=%d) — will retry with backoff", (int)event);
     lvgl_port_lock(0);
-    status_bar_set_wifi_status(WIFI_STATUS_PROVISIONING);
+    status_bar_set_wifi_status(WIFI_STATUS_DISCONNECTED);
     lvgl_port_unlock();
-    ble_provisioning_start();
+    schedule_reconnect();
     break;
   }
 }

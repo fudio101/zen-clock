@@ -13,21 +13,42 @@ is reported immediately — reducing reconnect latency after short sleep cycles.
 ## 2. API Summary
 
 ```c
-// Initialize and start SNTP sync. Call after WiFi is connected.
-esp_err_t sntp_sync_init(sntp_sync_event_cb_t cb);
+// Start SNTP sync. Call once after first WiFi connection.
+esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync);
 
-// Stop SNTP sync and release resources.
-void sntp_sync_deinit(void);
+// Notify SNTP that WiFi just reconnected.
+// Wakes periodic-resync task immediately if last sync is stale (>1h) or never occurred.
+// Safe to call multiple times; no-op if sync is still fresh.
+void sntp_sync_notify_connected(void);
+
+// Check if time has been synchronized this session.
+bool sntp_sync_is_synced(void);
+
+// Stop SNTP client and free resources.
+void sntp_sync_stop(void);
 ```
 
 ### Events
 
-| Event               | Description                                                    |
-|---------------------|----------------------------------------------------------------|
-| `SNTP_EVENT_SYNCED` | Time successfully synchronized (or restored from RTC on wake). |
-| `SNTP_EVENT_FAILED` | Sync attempt timed out (30s) with no response from any server. |
+| Event                | Description                                                    |
+|----------------------|----------------------------------------------------------------|
+| `SNTP_EVENT_SYNCING` | Sync in progress (initial or periodic re-sync).                |
+| `SNTP_EVENT_SYNCED`  | Time successfully synchronized (or restored from RTC on wake). |
+| `SNTP_EVENT_FAILED`  | Sync attempt timed out with no response from any server.       |
 
-## 2b. Deep Sleep Wake Behavior
+## 2b. Offline Reconnect Behavior
+
+When WiFi drops and later reconnects, `sntp_sync_notify_connected()` checks whether a resync is due:
+
+| Condition on reconnect                 | Behavior                                                                            |
+|----------------------------------------|-------------------------------------------------------------------------------------|
+| Last sync < 1 hour ago                 | No-op — resync not due yet, task keeps sleeping until interval expires.             |
+| Last sync ≥ 1 hour ago or never synced | Wakes the periodic-resync task immediately via event group bit (`SNTP_BIT_RESYNC`). |
+
+The task uses `xEventGroupWaitBits` (not `vTaskDelay`) for its sleep intervals, so it responds to the wake signal
+without polling.
+
+## 2c. Deep Sleep Wake Behavior
 
 The last successful sync time is stored in RTC memory (`RTC_DATA_ATTR`) which persists through deep sleep:
 
@@ -58,8 +79,12 @@ static void on_sntp_sync(sntp_sync_event_t event) {
     }
 }
 
-// After WiFi connected:
-sntp_sync_init(on_sntp_sync);
+// On first WiFi connect (WIFI_MGR_CONNECTED):
+sntp_sync_start(on_sntp_sync);
+
+// On subsequent WiFi reconnects (WIFI_MGR_CONNECTED with SNTP already running):
+sntp_sync_notify_connected();  // triggers immediate resync if stale
 ```
 
-Call `sntp_sync_deinit()` before entering deep sleep or when WiFi is disconnected for an extended period.
+Do **not** call `sntp_sync_start()` again on reconnect — it will fail with `ESP_ERR_INVALID_STATE`. Use
+`sntp_sync_notify_connected()` instead.
