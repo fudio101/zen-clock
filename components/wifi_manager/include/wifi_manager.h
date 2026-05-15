@@ -9,7 +9,6 @@ extern "C"
 #endif
 
 #include "esp_err.h"
-#include <stdbool.h>
 
 #define WIFI_SSID_MAX_LEN 33
 #define WIFI_PASS_MAX_LEN 65

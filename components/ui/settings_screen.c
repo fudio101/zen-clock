@@ -21,7 +21,7 @@
 #include <esp_log.h>
 #include <stdio.h>
 
-static const char *TAG = "settings_scr";
+static const char *const tag = "settings_scr";
 
 // ============================================================
 // Item definitions
@@ -52,7 +52,7 @@ typedef struct
 static const char *s_theme_options[] = {"Dark", "Light"};
 
 #define SETTINGS_ITEM_COUNT 7
-#define SETTINGS_VISIBLE 5 // items shown at once (5×24px = 120px <= 170-50=120px)
+#define SETTINGS_VISIBLE    5 // items shown at once (5×24px = 120px <= 170-50=120px)
 
 static setting_item_t s_items[SETTINGS_ITEM_COUNT] = {
     {.label = "Theme", .type = STYPE_TOGGLE, .options = s_theme_options, .option_count = 2},
@@ -67,10 +67,10 @@ static setting_item_t s_items[SETTINGS_ITEM_COUNT] = {
 // ============================================================
 // Layout constants
 // ============================================================
-#define TITLE_Y 24
-#define LIST_Y_START 50
-#define LIST_ITEM_H 24
-#define LIST_X_PAD 16
+#define TITLE_Y       24
+#define LIST_Y_START  50
+#define LIST_ITEM_H   24
+#define LIST_X_PAD    16
 #define VALUE_X_RIGHT (-12) // right-aligned offset from screen edge
 
 // ============================================================
@@ -98,17 +98,25 @@ static void apply_scroll(void)
     {
       lv_obj_set_y(s_name_labels[i], y);
       if (visible)
+      {
         lv_obj_remove_flag(s_name_labels[i], LV_OBJ_FLAG_HIDDEN);
+      }
       else
+      {
         lv_obj_add_flag(s_name_labels[i], LV_OBJ_FLAG_HIDDEN);
+      }
     }
     if (s_value_labels[i])
     {
       lv_obj_set_y(s_value_labels[i], y);
       if (visible)
+      {
         lv_obj_remove_flag(s_value_labels[i], LV_OBJ_FLAG_HIDDEN);
+      }
       else
+      {
         lv_obj_add_flag(s_value_labels[i], LV_OBJ_FLAG_HIDDEN);
+      }
     }
   }
 }
@@ -118,7 +126,7 @@ static void apply_scroll(void)
 // ============================================================
 static uint32_t compute_sleep_s(void)
 {
-  return (uint32_t)s_items[2].value * 3600 + (uint32_t)s_items[3].value * 60 + (uint32_t)s_items[4].value;
+  return (uint32_t) s_items[2].value * 3600 + (uint32_t) s_items[3].value * 60 + (uint32_t) s_items[4].value;
 }
 
 // ============================================================
@@ -127,7 +135,9 @@ static uint32_t compute_sleep_s(void)
 static void update_value_text(int index)
 {
   if (!s_value_labels[index])
+  {
     return;
+  }
 
   setting_item_t *item = &s_items[index];
   char buf[16];
@@ -136,13 +146,19 @@ static void update_value_text(int index)
   {
   case STYPE_TOGGLE:
     if (item->value >= 0 && item->value < item->option_count)
+    {
       lv_label_set_text(s_value_labels[index], item->options[item->value]);
+    }
     break;
   case STYPE_RANGE:
     if (item->unit && item->unit[0] != '\0')
+    {
       snprintf(buf, sizeof(buf), "%d%s", item->value, item->unit);
+    }
     else
+    {
       snprintf(buf, sizeof(buf), "%d", item->value);
+    }
     lv_label_set_text(s_value_labels[index], buf);
     break;
   case STYPE_ACTION:
@@ -171,7 +187,9 @@ static void update_focus_visual(void)
   for (int i = 0; i < SETTINGS_ITEM_COUNT; i++)
   {
     if (!s_name_labels[i])
+    {
       continue;
+    }
 
     if (i == s_focus)
     {
@@ -185,7 +203,9 @@ static void update_focus_visual(void)
     }
 
     if (s_value_labels[i])
+    {
       lv_obj_set_style_text_opa(s_value_labels[i], (i == s_focus) ? LV_OPA_COVER : LV_OPA_70, 0);
+    }
   }
 }
 
@@ -195,7 +215,9 @@ static void update_focus_visual(void)
 static void show_edit_box(int index)
 {
   if (!s_value_labels[index])
+  {
     return;
+  }
 
   if (s_edit_box)
   {
@@ -229,39 +251,40 @@ static void hide_edit_box(void)
 // ============================================================
 // Apply value changes (auto-save + live preview)
 // ============================================================
-static void apply_change(int index)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+static void apply_change(const int index)
 {
-  setting_item_t *item = &s_items[index];
+  const setting_item_t *item = &s_items[index];
 
   switch (index)
   {
   case 0: // Theme
   {
-    bool is_light = (item->value == 1);
+    const bool is_light = (item->value == 1);
     settings_set_theme_light(is_light);
     ui_set_theme(is_light);
-    ESP_LOGI(TAG, "Theme -> %s", is_light ? "Light" : "Dark");
+    ESP_LOGI(tag, "Theme -> %s", is_light ? "Light" : "Dark");
     break;
   }
   case 1: // Brightness
-    settings_set_brightness((uint8_t)item->value);
-    bsp_display_set_brightness((uint8_t)item->value, 0);
-    ESP_LOGI(TAG, "Brightness -> %d%%", item->value);
+    settings_set_brightness((uint8_t) item->value);
+    bsp_display_set_brightness((uint8_t) item->value, 0);
+    ESP_LOGI(tag, "Brightness -> %d%%", item->value);
     break;
   case 2: // Sleep H
-    settings_set_sleep_h((uint8_t)item->value);
+    settings_set_sleep_h((uint8_t) item->value);
     deep_sleep_update_timeout(compute_sleep_s());
-    ESP_LOGI(TAG, "Sleep H -> %d", item->value);
+    ESP_LOGI(tag, "Sleep H -> %d", item->value);
     break;
   case 3: // Sleep M
-    settings_set_sleep_m((uint8_t)item->value);
+    settings_set_sleep_m((uint8_t) item->value);
     deep_sleep_update_timeout(compute_sleep_s());
-    ESP_LOGI(TAG, "Sleep M -> %d", item->value);
+    ESP_LOGI(tag, "Sleep M -> %d", item->value);
     break;
   case 4: // Sleep S
-    settings_set_sleep_s((uint8_t)item->value);
+    settings_set_sleep_s((uint8_t) item->value);
     deep_sleep_update_timeout(compute_sleep_s());
-    ESP_LOGI(TAG, "Sleep S -> %d", item->value);
+    ESP_LOGI(tag, "Sleep S -> %d", item->value);
     break;
   default:
     break;
@@ -280,10 +303,10 @@ void settings_screen_create(lv_obj_t *parent)
 
   // Load current values from NVS
   s_items[0].value = settings_get_theme_light() ? 1 : 0;
-  s_items[1].value = (int)settings_get_brightness();
-  s_items[2].value = (int)settings_get_sleep_h();
-  s_items[3].value = (int)settings_get_sleep_m();
-  s_items[4].value = (int)settings_get_sleep_s();
+  s_items[1].value = (int) settings_get_brightness();
+  s_items[2].value = (int) settings_get_sleep_h();
+  s_items[3].value = (int) settings_get_sleep_m();
+  s_items[4].value = (int) settings_get_sleep_s();
 
   // Title
   lv_obj_t *title = lv_label_create(parent);
@@ -329,9 +352,13 @@ void settings_screen_focus_prev(void)
 {
   s_focus = (s_focus - 1 + SETTINGS_ITEM_COUNT) % SETTINGS_ITEM_COUNT;
   if (s_focus == SETTINGS_ITEM_COUNT - 1)
+  {
     s_scroll = SETTINGS_ITEM_COUNT - SETTINGS_VISIBLE; // wrap: jump to bottom
+  }
   else if (s_focus < s_scroll)
+  {
     s_scroll = s_focus;
+  }
   apply_scroll();
   update_focus_visual();
 }
@@ -340,9 +367,13 @@ void settings_screen_focus_next(void)
 {
   s_focus = (s_focus + 1) % SETTINGS_ITEM_COUNT;
   if (s_focus == 0)
+  {
     s_scroll = 0; // wrap: jump to top
+  }
   else if (s_focus >= s_scroll + SETTINGS_VISIBLE)
+  {
     s_scroll = s_focus - SETTINGS_VISIBLE + 1;
+  }
   apply_scroll();
   update_focus_visual();
 }
@@ -358,9 +389,13 @@ void settings_screen_set_focus(int index)
   {
     s_focus = index;
     if (s_focus < s_scroll)
+    {
       s_scroll = s_focus;
+    }
     else if (s_focus >= s_scroll + SETTINGS_VISIBLE)
+    {
       s_scroll = s_focus - SETTINGS_VISIBLE + 1;
+    }
     apply_scroll();
     update_focus_visual();
   }
@@ -369,33 +404,45 @@ void settings_screen_set_focus(int index)
 bool settings_screen_is_action_item(int index)
 {
   if (index < 0 || index >= SETTINGS_ITEM_COUNT)
+  {
     return false;
+  }
   return s_items[index].type == STYPE_ACTION;
 }
 
 void settings_screen_execute_action(int index, nav_action_cb_t cb)
 {
   if (index < 0 || index >= SETTINGS_ITEM_COUNT)
+  {
     return;
+  }
   if (s_items[index].type != STYPE_ACTION)
+  {
     return;
+  }
 
-  ESP_LOGW(TAG, "Executing action: %s", s_items[index].label);
+  ESP_LOGW(tag, "Executing action: %s", s_items[index].label);
   if (cb)
+  {
     cb();
+  }
 }
 
 void settings_screen_enter_edit(int index)
 {
   if (index < 0 || index >= SETTINGS_ITEM_COUNT)
+  {
     return;
+  }
   if (s_items[index].type == STYPE_ACTION)
+  {
     return;
+  }
 
   s_editing = true;
   update_focus_visual();
   show_edit_box(index);
-  ESP_LOGI(TAG, "Edit: %s", s_items[index].label);
+  ESP_LOGI(tag, "Edit: %s", s_items[index].label);
 }
 
 void settings_screen_exit_edit(void)
@@ -405,9 +452,11 @@ void settings_screen_exit_edit(void)
   update_focus_visual();
 
   if (s_value_labels[s_focus])
+  {
     lv_obj_remove_local_style_prop(s_value_labels[s_focus], LV_STYLE_TEXT_COLOR, 0);
+  }
 
-  ESP_LOGI(TAG, "Edit done");
+  ESP_LOGI(tag, "Edit done");
 }
 
 void settings_screen_edit_increase(void)

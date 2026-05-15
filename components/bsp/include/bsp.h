@@ -61,8 +61,8 @@ extern "C"
   // Button Input
   // ============================================================
 
-#define BSP_BTN_BOOT 0 // BOOT button (GPIO0)
-#define BSP_BTN_IO14 1 // Side button (GPIO14)
+#define BSP_BTN_BOOT  0 // BOOT button (GPIO0)
+#define BSP_BTN_IO14  1 // Side button (GPIO14)
 #define BSP_BTN_COUNT 2
 
   /**

@@ -25,8 +25,8 @@ void app_main(void)
   const uint8_t brightness = settings_get_brightness();
 
   // Initialize deep sleep (auto-sleep timer + wakeup sources)
-  const uint32_t sleep_s = (uint32_t)settings_get_sleep_h() * 3600 + (uint32_t)settings_get_sleep_m() * 60 +
-                           (uint32_t)settings_get_sleep_s();
+  const uint32_t sleep_s = (uint32_t) settings_get_sleep_h() * 3600 + (uint32_t) settings_get_sleep_m() * 60 +
+                           (uint32_t) settings_get_sleep_s();
   deep_sleep_init(sleep_s);
 
   // Initialize UI (self-contained: creates all widgets + timers)

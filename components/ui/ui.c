@@ -5,7 +5,7 @@
 #include "nav.h"
 #include "lvgl.h"
 
-void ui_init(bool is_light)
+void ui_init(const bool is_light)
 {
   // --- Theme init ---
   lv_disp_t *dispp = lv_display_get_default();
@@ -17,7 +17,7 @@ void ui_init(bool is_light)
   nav_init();
 }
 
-void ui_set_theme(bool is_light)
+void ui_set_theme(const bool is_light)
 {
   lv_disp_t *dispp = lv_display_get_default();
   lv_theme_t *theme = lv_theme_default_init(dispp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),

@@ -19,10 +19,10 @@ static const char *s_menu_labels[] = {
 // ============================================================
 // Layout constants
 // ============================================================
-#define TITLE_Y 24
+#define TITLE_Y      24
 #define LIST_Y_START 50
-#define LIST_ITEM_H 24
-#define LIST_X_PAD 16
+#define LIST_ITEM_H  24
+#define LIST_X_PAD   16
 
 // ============================================================
 // Private state
@@ -43,7 +43,7 @@ static void update_focus_visual(void)
   }
 
   // Highlight focused, dim others
-  for (int i = 0; i < (int)MENU_ITEM_COUNT; i++)
+  for (int i = 0; i < (int) MENU_ITEM_COUNT; i++)
   {
     if (!s_item_labels[i])
     {
@@ -84,7 +84,7 @@ void menu_screen_create(lv_obj_t *parent)
   lv_obj_set_pos(s_focus_marker, LIST_X_PAD, LIST_Y_START);
 
   // Menu items
-  for (int i = 0; i < (int)MENU_ITEM_COUNT; i++)
+  for (int i = 0; i < (int) MENU_ITEM_COUNT; i++)
   {
     s_item_labels[i] = lv_label_create(parent);
     lv_obj_set_style_text_font(s_item_labels[i], &lv_font_montserrat_14, 0);
@@ -106,7 +106,7 @@ void menu_screen_focus_prev(void)
 
 void menu_screen_focus_next(void)
 {
-  if (s_focus < (int)MENU_ITEM_COUNT - 1)
+  if (s_focus < (int) MENU_ITEM_COUNT - 1)
   {
     s_focus++;
     update_focus_visual();
@@ -120,7 +120,7 @@ int menu_screen_get_focus(void)
 
 void menu_screen_set_focus(int index)
 {
-  if (index >= 0 && index < (int)MENU_ITEM_COUNT)
+  if (index >= 0 && index < (int) MENU_ITEM_COUNT)
   {
     s_focus = index;
     update_focus_visual();

@@ -1,5 +1,5 @@
 CompileFlags:
-  # Remove flags that clangd cannot process
+  # Remove flags that clangd cannot process (Xtensa/ESP32-S3 specific)
   Remove:
     - -mlongcalls
     - -mdisable-hardware-atomics
@@ -8,6 +8,8 @@ CompileFlags:
     - -fzero-init-padding-bits=*
     - -fno-malloc-dce
     - -fmacro-prefix-map=*
+    - -mtext-section-literals
+    - -mforce-l32
 
 Diagnostics:
   UnusedIncludes: None
@@ -16,3 +18,24 @@ Diagnostics:
     # "architecture not supported" from newlib/system headers
     # when cross-compiling for Xtensa on macOS host
     - pp_hash_error
+    - pp_file_not_found
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - cert-*
+      - clang-analyzer-*
+      - misc-redundant-expression
+      - misc-unused-parameters
+      - readability-braces-around-statements
+    Remove:
+      - modernize-*
+      - cppcoreguidelines-*
+      - bugprone-easily-swappable-parameters
+
+InlayHints:
+  Enabled: true
+  DeducedTypes: true
+  ParameterNames: true
+
+Hover:
+  ShowAKA: true

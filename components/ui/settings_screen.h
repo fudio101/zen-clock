@@ -5,7 +5,6 @@
 
 #include "lvgl.h"
 #include "nav.h"
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C"

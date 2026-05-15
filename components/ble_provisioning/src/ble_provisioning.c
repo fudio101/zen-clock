@@ -29,11 +29,11 @@
 // SRP6a salt+verifier generation
 #include "esp_srp.h"
 
-static const char *TAG = "BLEProv";
+static const char *const tag = "BLEProv";
 
-#define SEC2_USERNAME "wifiprov"
+#define SEC2_USERNAME     "wifiprov"
 #define SEC2_USERNAME_LEN 8
-#define SEC2_SALT_LEN 16
+#define SEC2_SALT_LEN     16
 
 static ble_prov_cb_t s_callback = NULL;
 static bool s_active = false;
@@ -76,8 +76,13 @@ static void free_sec2_credentials(void)
 // network_provisioning event handler
 // ============================================================
 
-static void prov_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+static void prov_event_handler(void *arg, // NOLINT(readability-non-const-parameter)
+                               const esp_event_base_t base,
+                               const int32_t id,
+                               void *data)
 {
+  (void) arg;
   if (base != NETWORK_PROV_EVENT)
   {
     return;
@@ -86,42 +91,54 @@ static void prov_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
   switch (id)
   {
   case NETWORK_PROV_START:
-    ESP_LOGI(TAG, "BLE advertisement started");
+    ESP_LOGI(tag, "BLE advertisement started");
     s_active = true;
     if (s_callback)
+    {
       s_callback(BLE_PROV_STARTED, NULL, NULL);
+    }
     break;
 
   case NETWORK_PROV_WIFI_CRED_RECV:
   {
-    const auto cfg = (wifi_sta_config_t *)data;
-    const auto ssid = (const char *)cfg->ssid;
-    const auto pass = (const char *)cfg->password;
-    ESP_LOGI(TAG, "Credentials received: SSID=\"%s\"", ssid);
+    if (!data)
+    {
+      break;
+    }
+    const auto cfg = (wifi_sta_config_t *) data;
+    const auto ssid = (const char *) cfg->ssid;
+    const auto pass = (const char *) cfg->password;
+    ESP_LOGI(tag, "Credentials received: SSID=\"%s\"", ssid);
     if (s_callback)
+    {
       s_callback(BLE_PROV_CRED_RECEIVED, ssid, pass);
+    }
     break;
   }
 
   case NETWORK_PROV_WIFI_CRED_SUCCESS:
-    ESP_LOGI(TAG, "Credential verification succeeded");
+    ESP_LOGI(tag, "Credential verification succeeded");
     break;
 
   case NETWORK_PROV_WIFI_CRED_FAIL:
   {
-    network_prov_wifi_sta_fail_reason_t *reason = (network_prov_wifi_sta_fail_reason_t *)data;
-    ESP_LOGW(TAG, "Credential verification failed (reason=%d)", reason ? (int)*reason : -1);
+    const auto reason = (network_prov_wifi_sta_fail_reason_t *) data;
+    ESP_LOGW(tag, "Credential verification failed (reason=%d)", reason ? (int) *reason : -1);
     if (s_callback)
+    {
       s_callback(BLE_PROV_FAILED, NULL, NULL);
+    }
     break;
   }
 
   case NETWORK_PROV_END:
-    ESP_LOGI(TAG, "Provisioning ended");
+    ESP_LOGI(tag, "Provisioning ended");
     s_active = false;
     free_sec2_credentials();
     if (s_callback)
+    {
       s_callback(BLE_PROV_SUCCESS, NULL, NULL);
+    }
     break;
 
   default:
@@ -141,23 +158,24 @@ esp_err_t ble_provisioning_init(ble_prov_cb_t callback)
 
   if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "Failed to register prov event handler: %s", esp_err_to_name(ret));
+    ESP_LOGE(tag, "Failed to register prov event handler: %s", esp_err_to_name(ret));
   }
   return ret;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 esp_err_t ble_provisioning_start(void)
 {
   if (s_mem_freed)
   {
-    ESP_LOGE(TAG, "BLE memory already released — cannot start provisioning again");
+    ESP_LOGE(tag, "BLE memory already released — cannot start provisioning again");
     return ESP_ERR_INVALID_STATE;
   }
 
   char device_name[32];
   build_device_name(device_name, sizeof(device_name));
   build_sec2_password();
-  ESP_LOGI(TAG, "Starting BLE provisioning: device_name=\"%s\"", device_name);
+  ESP_LOGI(tag, "Starting BLE provisioning: device_name=\"%s\"", device_name);
 
   network_prov_mgr_config_t config = {
       .scheme = network_prov_scheme_ble,
@@ -167,17 +185,17 @@ esp_err_t ble_provisioning_start(void)
   esp_err_t ret = network_prov_mgr_init(config);
   if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "network_prov_mgr_init failed: %s", esp_err_to_name(ret));
+    ESP_LOGE(tag, "network_prov_mgr_init failed: %s", esp_err_to_name(ret));
     return ret;
   }
 
   // Generate SRP6a salt+verifier from MAC-derived password.
   // Buffers are heap-alloc'd — freed in NETWORK_PROV_END handler (or on error below).
-  ret = esp_srp_gen_salt_verifier(SEC2_USERNAME, SEC2_USERNAME_LEN, s_sec2_password, strlen(s_sec2_password),
+  ret = esp_srp_gen_salt_verifier(SEC2_USERNAME, SEC2_USERNAME_LEN, s_sec2_password, (int) strlen(s_sec2_password),
                                   &s_sec2_salt, SEC2_SALT_LEN, &s_sec2_verifier, &s_sec2_verifier_len);
   if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "esp_srp_gen_salt_verifier failed: %s", esp_err_to_name(ret));
+    ESP_LOGE(tag, "esp_srp_gen_salt_verifier failed: %s", esp_err_to_name(ret));
     network_prov_mgr_deinit();
     return ret;
   }
@@ -187,13 +205,13 @@ esp_err_t ble_provisioning_start(void)
       .salt = s_sec2_salt,
       .salt_len = SEC2_SALT_LEN,
       .verifier = s_sec2_verifier,
-      .verifier_len = (uint16_t)s_sec2_verifier_len,
+      .verifier_len = (uint16_t) s_sec2_verifier_len,
   };
 
-  ret = network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_2, (const void *)&sec2_params, device_name, NULL);
+  ret = network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_2, (const void *) &sec2_params, device_name, NULL);
   if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "network_prov_mgr_start_provisioning failed: %s", esp_err_to_name(ret));
+    ESP_LOGE(tag, "network_prov_mgr_start_provisioning failed: %s", esp_err_to_name(ret));
     free_sec2_credentials();
     network_prov_mgr_deinit();
     return ret;
@@ -203,7 +221,7 @@ esp_err_t ble_provisioning_start(void)
   return ESP_OK;
 }
 
-esp_err_t ble_provisioning_stop(void)
+esp_err_t ble_provisioning_stop(void) // NOLINT
 {
   if (!s_active)
   {
@@ -214,7 +232,7 @@ esp_err_t ble_provisioning_stop(void)
   network_prov_mgr_deinit();
   free_sec2_credentials();
   s_active = false;
-  ESP_LOGI(TAG, "BLE provisioning stopped");
+  ESP_LOGI(tag, "BLE provisioning stopped");
   return ESP_OK;
 }
 
@@ -228,7 +246,7 @@ void ble_provisioning_get_device_name(char *buf, size_t len)
   build_device_name(buf, len);
 }
 
-void ble_provisioning_get_password(char *buf, size_t len)
+void ble_provisioning_get_password(char *buf, const size_t len)
 {
   snprintf(buf, len, "%s", s_sec2_password);
 }
@@ -244,10 +262,10 @@ void ble_provisioning_release_memory(void)
   // Releasing too early causes heap corruption.
   vTaskDelay(pdMS_TO_TICKS(200));
 
-  ESP_LOGI(TAG, "Releasing BLE controller memory (~110KB)...");
+  ESP_LOGI(tag, "Releasing BLE controller memory (~110KB)...");
   esp_bt_controller_disable();
   esp_bt_controller_deinit();
   esp_bt_mem_release(ESP_BT_MODE_BLE);
   s_mem_freed = true;
-  ESP_LOGI(TAG, "BLE memory released. Free heap: %lu bytes", (unsigned long)esp_get_free_heap_size());
+  ESP_LOGI(tag, "BLE memory released. Free heap: %lu bytes", (unsigned long) esp_get_free_heap_size());
 }

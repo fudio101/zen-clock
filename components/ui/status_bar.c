@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <esp_log.h>
 
-static const char *TAG = "StatusBar";
+static const char *const tag = "StatusBar";
 
 // ============================================================
 // Private state
@@ -48,13 +48,14 @@ static void realign_chain(void)
 // ============================================================
 // Battery timer callback — runs inside lv_timer_handler()
 // ============================================================
-static void battery_timer_cb(lv_timer_t *timer)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+static void battery_timer_cb(lv_timer_t *timer) // NOLINT(readability-non-const-parameter)
 {
-  (void)timer;
+  (void) timer;
   char buf[16];
 
-  int pct = bsp_battery_get_percentage();
-  bool usb = bsp_battery_usb_connected();
+  const int pct = bsp_battery_get_percentage();
+  const bool usb = bsp_battery_usb_connected();
 
   if (pct >= 0)
   {
@@ -88,7 +89,7 @@ static void battery_timer_cb(lv_timer_t *timer)
       lv_label_set_text(s_bat_icon, LV_SYMBOL_BATTERY_EMPTY);
     }
 
-    ESP_LOGI(TAG, "Battery: %d%% (%s)", pct, usb ? "USB" : "BATT");
+    ESP_LOGI(tag, "Battery: %d%% (%s)", pct, usb ? "USB" : "BATT");
   }
   else
   {

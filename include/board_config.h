@@ -20,12 +20,12 @@
 #define PIN_LCD_D7 48
 
 // --- LCD Control ---
-#define PIN_LCD_WR 8 // Write clock (PCLK)
-#define PIN_LCD_RD 9 // Read (input, pull-up)
-#define PIN_LCD_CS 6
-#define PIN_LCD_DC 7
+#define PIN_LCD_WR  8 // Write clock (PCLK)
+#define PIN_LCD_RD  9 // Read (input, pull-up)
+#define PIN_LCD_CS  6
+#define PIN_LCD_DC  7
 #define PIN_LCD_RST 5
-#define PIN_LCD_BL 38  // Backlight (PWM capable)
+#define PIN_LCD_BL  38 // Backlight (PWM capable)
 #define PIN_LCD_PWR 15 // LDO enable (HIGH = on)
 
 // --- Display Parameters ---
@@ -40,8 +40,8 @@
 #define PIN_BTN_IO14 14 // Side button (active LOW)
 
 // --- Backlight Defaults ---
-#define LCD_BL_PWM_FREQ_HZ 5000
-#define LCD_BL_LEDC_TIMER 1   // LEDC_TIMER_1
+#define LCD_BL_PWM_FREQ_HZ  5000
+#define LCD_BL_LEDC_TIMER   1 // LEDC_TIMER_1
 #define LCD_BL_LEDC_CHANNEL 0 // LEDC_CHANNEL_0
 
 #endif // BOARD_CONFIG_H

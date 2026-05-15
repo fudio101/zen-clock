@@ -5,5 +5,10 @@ ColumnLimit: 120
 SortIncludes: false
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
 IndentCaseLabels: false
+PointerAlignment: Right
+AlignConsecutiveMacros: Consecutive
+AlignTrailingComments: true
+SpaceAfterCStyleCast: true
+BinPackParameters: false

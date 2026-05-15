@@ -13,11 +13,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#define QR_SIZE 140
-#define QR_X_PAD 12
-#define TEXT_X_PAD 8
+#define QR_SIZE      140
+#define QR_X_PAD     12
+#define TEXT_X_PAD   8
 #define TEXT_X_START (QR_X_PAD + QR_SIZE + TEXT_X_PAD)
-#define TEXT_WIDTH (320 - TEXT_X_START - 8)
+#define TEXT_WIDTH   (320 - TEXT_X_START - 8)
 
 static lv_obj_t *s_overlay = NULL;
 

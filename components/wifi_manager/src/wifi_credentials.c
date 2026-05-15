@@ -13,11 +13,11 @@
 #include <esp_log.h>
 #include <nvs.h>
 
-static const char *TAG = "WiFiCred";
-#define NVS_NAMESPACE "wifi_cred"
-#define NVS_KEY_SSID "ssid"
-#define NVS_KEY_PASS "pass"
-#define NVS_KEY_BSSID "bssid"
+static const char *const tag = "WiFiCred";
+#define NVS_NAMESPACE   "wifi_cred"
+#define NVS_KEY_SSID    "ssid"
+#define NVS_KEY_PASS    "pass"
+#define NVS_KEY_BSSID   "bssid"
 #define NVS_KEY_CHANNEL "ch"
 
 // ============================================================
@@ -92,7 +92,7 @@ esp_err_t wifi_manager_set_credential(const char *ssid, const char *pass)
   }
 
   nvs_close(h);
-  ESP_LOGI(TAG, "Credential saved: \"%s\"", ssid);
+  ESP_LOGI(tag, "Credential saved: \"%s\"", ssid);
   return ret;
 }
 
@@ -111,7 +111,7 @@ esp_err_t wifi_manager_clear_credential(void)
   nvs_erase_key(h, NVS_KEY_CHANNEL);
   ret = nvs_commit(h);
   nvs_close(h);
-  ESP_LOGI(TAG, "Credential cleared");
+  ESP_LOGI(tag, "Credential cleared");
   return ret;
 }
 
@@ -131,7 +131,7 @@ void wifi_cred_save_ap_hint(const uint8_t *bssid, uint8_t channel)
   nvs_set_u8(h, NVS_KEY_CHANNEL, channel);
   nvs_commit(h);
   nvs_close(h);
-  ESP_LOGD(TAG, "AP hint saved: ch=%d bssid=%02X:%02X:%02X:%02X:%02X:%02X", channel, bssid[0], bssid[1], bssid[2],
+  ESP_LOGD(tag, "AP hint saved: ch=%d bssid=%02X:%02X:%02X:%02X:%02X:%02X", channel, bssid[0], bssid[1], bssid[2],
            bssid[3], bssid[4], bssid[5]);
 }
 

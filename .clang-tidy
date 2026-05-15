@@ -1,1 +1,35 @@
-Checks: '-modernize-use-nullptr'
+Checks: "-*,\
+  bugprone-*,\
+  cert-dcl03-c,\
+  cert-dcl16-c,\
+  cert-dcl37-c,\
+  cert-env33-c,\
+  cert-err34-c,\
+  cert-flp30-c,\
+  cert-msc30-c,\
+  cert-msc32-c,\
+  cert-pos44-c,\
+  clang-analyzer-*,\
+  misc-redundant-expression,\
+  misc-unused-parameters,\
+  readability-braces-around-statements,\
+  readability-function-cognitive-complexity,\
+  readability-identifier-naming,\
+  readability-inconsistent-ptr-usage,\
+  -bugprone-easily-swappable-parameters,\
+  -bugprone-infinite-loop,\
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling"
+
+CheckOptions:
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.StaticConstantCase
+    value: UPPER_CASE
+  - key: readability-function-cognitive-complexity.Threshold
+    value: "50"

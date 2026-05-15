@@ -9,36 +9,36 @@
 #include <esp_lcd_panel_st7789.h>
 #include "driver/gpio.h"
 
-static const char *TAG = "bsp_display";
+static const char *const tag = "bsp_display";
 
 // ============================================================
 // I80 Bus & Panel Constants (private to this file)
 // ============================================================
-#define PIXEL_CLOCK_HZ (17 * 1000 * 1000)
-#define I80_BUS_WIDTH 8
+#define PIXEL_CLOCK_HZ        (17 * 1000 * 1000)
+#define I80_BUS_WIDTH         8
 #define I80_TRANS_QUEUE_DEPTH 20
-#define I80_DC_CMD_LEVEL 0
-#define I80_DC_DUMMY_LEVEL 0
-#define I80_DC_DATA_LEVEL 1
-#define CMD_BITS 8
-#define PARAM_BITS 8
-#define PWR_ON_LEVEL 1
+#define I80_DC_CMD_LEVEL      0
+#define I80_DC_DUMMY_LEVEL    0
+#define I80_DC_DATA_LEVEL     1
+#define CMD_BITS              8
+#define PARAM_BITS            8
+#define PWR_ON_LEVEL          1
 
 // ============================================================
 // LVGL Port Constants
 // ============================================================
-#define LVGL_BUF_SIZE (LCD_H_RES * LCD_V_RES)
-#define LVGL_TICK_PERIOD_MS 5
-#define LVGL_MAX_SLEEP_MS 10
+#define LVGL_BUF_SIZE        (LCD_H_RES * LCD_V_RES)
+#define LVGL_TICK_PERIOD_MS  5
+#define LVGL_MAX_SLEEP_MS    10
 #define LVGL_TASK_STACK_SIZE (6 * 1024)
-#define LVGL_TASK_PRIORITY 2
+#define LVGL_TASK_PRIORITY   2
 
 // ============================================================
 // I80 Bus Init
 // ============================================================
 static void init_i80_bus(esp_lcd_panel_io_handle_t *io_handle)
 {
-  ESP_LOGI(TAG, "Initializing Intel 8080 bus...");
+  ESP_LOGI(tag, "Initializing Intel 8080 bus...");
 
   esp_lcd_i80_bus_handle_t i80_bus = NULL;
   esp_lcd_i80_bus_config_t bus_config = {
@@ -74,7 +74,7 @@ static void init_i80_bus(esp_lcd_panel_io_handle_t *io_handle)
 // ============================================================
 static void init_panel(esp_lcd_panel_io_handle_t io_handle, esp_lcd_panel_handle_t *panel)
 {
-  ESP_LOGI(TAG, "Initializing ST7789 LCD driver...");
+  ESP_LOGI(tag, "Initializing ST7789 LCD driver...");
 
   esp_lcd_panel_dev_config_t panel_config = {
       .reset_gpio_num = PIN_LCD_RST,
@@ -102,11 +102,11 @@ static void init_panel(esp_lcd_panel_io_handle_t io_handle, esp_lcd_panel_handle
 // ============================================================
 static void init_power(void)
 {
-  ESP_LOGI(TAG, "Configuring LCD power GPIO...");
+  ESP_LOGI(tag, "Configuring LCD power GPIO...");
   gpio_set_direction(PIN_LCD_PWR, GPIO_MODE_OUTPUT);
   gpio_set_level(PIN_LCD_PWR, PWR_ON_LEVEL);
 
-  ESP_LOGI(TAG, "Configuring LCD RD GPIO...");
+  ESP_LOGI(tag, "Configuring LCD RD GPIO...");
   gpio_set_direction(PIN_LCD_RD, GPIO_MODE_INPUT);
   gpio_set_pull_mode(PIN_LCD_RD, GPIO_PULLUP_ONLY);
 }
@@ -116,7 +116,7 @@ static void init_power(void)
 // ============================================================
 static lv_disp_t *register_lvgl_display(esp_lcd_panel_io_handle_t io_handle, esp_lcd_panel_handle_t panel)
 {
-  ESP_LOGI(TAG, "Registering display with LVGL port...");
+  ESP_LOGI(tag, "Registering display with LVGL port...");
 
   const lvgl_port_display_cfg_t disp_cfg = {.io_handle = io_handle,
                                             .panel_handle = panel,
@@ -172,7 +172,7 @@ void bsp_display_init(lv_disp_t **disp_handle, bool backlight_on)
     bsp_backlight_set(100, 0);
   }
 
-  ESP_LOGI(TAG, "BSP initialized: %dx%d ST7789 via I80, LVGL ready", LCD_H_RES, LCD_V_RES);
+  ESP_LOGI(tag, "BSP initialized: %dx%d ST7789 via I80, LVGL ready", LCD_H_RES, LCD_V_RES);
 }
 
 void bsp_display_set_brightness(uint8_t percent, uint32_t fade_time_ms)

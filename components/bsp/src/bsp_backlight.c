@@ -7,7 +7,7 @@
 
 #include <esp_log.h>
 
-static const char *TAG = "bsp_backlight";
+static const char *const tag = "bsp_backlight";
 static lcd_backlight_handle_t s_bl_handle;
 
 // ============================================================
@@ -15,7 +15,7 @@ static lcd_backlight_handle_t s_bl_handle;
 // ============================================================
 void bsp_backlight_setup(void)
 {
-  ESP_LOGI(TAG, "Configuring backlight via lcd_backlight component...");
+  ESP_LOGI(tag, "Configuring backlight via lcd_backlight component...");
 
   const lcd_backlight_config_t bl_config = {
       .gpio_num = PIN_LCD_BL,

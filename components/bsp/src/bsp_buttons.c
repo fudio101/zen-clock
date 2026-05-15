@@ -15,19 +15,19 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
-static const char *TAG = "bsp_buttons";
+static const char *const tag = "bsp_buttons";
 
 // ============================================================
 // Timing constants
 // ============================================================
-#define BTN_DEBOUNCE_MS 50
-#define BTN_LONG_MS 800
-#define BTN_EMERGENCY_MS 3000
-#define BTN_POLL_MS 50
-#define BTN_TASK_STACK 2560
+#define BTN_DEBOUNCE_MS   50
+#define BTN_LONG_MS       800
+#define BTN_EMERGENCY_MS  3000
+#define BTN_POLL_MS       50
+#define BTN_TASK_STACK    2560
 #define BTN_TASK_PRIORITY 3
 
-static const int s_btn_pins[BSP_BTN_COUNT] = {PIN_BTN_BOOT, PIN_BTN_IO14};
+static constexpr int s_btn_pins[BSP_BTN_COUNT] = {PIN_BTN_BOOT, PIN_BTN_IO14};
 static bsp_button_cb_t s_callback = NULL;
 static QueueHandle_t s_btn_queue = NULL;
 
@@ -36,7 +36,7 @@ static QueueHandle_t s_btn_queue = NULL;
 // ============================================================
 static void IRAM_ATTR gpio_isr_handler(void *arg)
 {
-  int btn_id = (int)(intptr_t)arg;
+  int btn_id = (int) (intptr_t) arg;
   xQueueSendFromISR(s_btn_queue, &btn_id, NULL);
 }
 
@@ -59,11 +59,13 @@ static inline bool btn_is_pressed(int btn_id)
 //      - At BTN_EMERGENCY_MS (IO14 only) → fire BSP_BTN_EMERGENCY
 //   4. On release: if long was never fired → fire BSP_BTN_SHORT
 // ============================================================
-static void button_task(void *pvParameters)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+static void button_task(void *pvParameters) // NOLINT(readability-non-const-parameter)
 {
+  (void) pvParameters;
   int btn_id;
 
-  while (1)
+  while (1) // NOLINT
   {
     if (!xQueueReceive(s_btn_queue, &btn_id, portMAX_DELAY))
     {
@@ -101,7 +103,7 @@ static void button_task(void *pvParameters)
       if (!long_fired && held_ms >= BTN_LONG_MS)
       {
         long_fired = true;
-        ESP_LOGD(TAG, "btn%d: LONG (%lums)", btn_id, (unsigned long)held_ms);
+        ESP_LOGD(tag, "btn%d: LONG (%lums)", btn_id, (unsigned long) held_ms);
         if (s_callback)
         {
           s_callback(btn_id, BSP_BTN_LONG);
@@ -112,7 +114,7 @@ static void button_task(void *pvParameters)
       if (!emergency_fired && btn_id == BSP_BTN_IO14 && held_ms >= BTN_EMERGENCY_MS)
       {
         emergency_fired = true;
-        ESP_LOGW(TAG, "btn%d: EMERGENCY (%lums)", btn_id, (unsigned long)held_ms);
+        ESP_LOGW(tag, "btn%d: EMERGENCY (%lums)", btn_id, (unsigned long) held_ms);
         if (s_callback)
         {
           s_callback(btn_id, BSP_BTN_EMERGENCY);
@@ -123,7 +125,7 @@ static void button_task(void *pvParameters)
     // Button released
     if (!long_fired)
     {
-      ESP_LOGD(TAG, "btn%d: SHORT (%lums)", btn_id, (unsigned long)held_ms);
+      ESP_LOGD(tag, "btn%d: SHORT (%lums)", btn_id, (unsigned long) held_ms);
       if (s_callback)
       {
         s_callback(btn_id, BSP_BTN_SHORT);
@@ -141,9 +143,10 @@ static void button_task(void *pvParameters)
 // ============================================================
 // Public API
 // ============================================================
-void bsp_buttons_init(bsp_button_cb_t callback)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void bsp_buttons_init(const bsp_button_cb_t callback)
 {
-  ESP_LOGI(TAG, "Initializing buttons...");
+  ESP_LOGI(tag, "Initializing buttons...");
 
   s_callback = callback;
   s_btn_queue = xQueueCreate(10, sizeof(int));
@@ -166,11 +169,11 @@ void bsp_buttons_init(bsp_button_cb_t callback)
         .intr_type = GPIO_INTR_ANYEDGE,
     };
     ESP_ERROR_CHECK(gpio_config(&io_conf));
-    ESP_ERROR_CHECK(gpio_isr_handler_add(s_btn_pins[i], gpio_isr_handler, (void *)(intptr_t)i));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(s_btn_pins[i], gpio_isr_handler, (void *) (intptr_t) i));
   }
 
   // Start button processing task
   xTaskCreatePinnedToCore(button_task, "buttons", BTN_TASK_STACK, NULL, BTN_TASK_PRIORITY, NULL, 0);
 
-  ESP_LOGI(TAG, "Buttons ready: GPIO%d (BOOT), GPIO%d (IO14)", PIN_BTN_BOOT, PIN_BTN_IO14);
+  ESP_LOGI(tag, "Buttons ready: GPIO%d (BOOT), GPIO%d (IO14)", PIN_BTN_BOOT, PIN_BTN_IO14);
 }

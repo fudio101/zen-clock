@@ -18,7 +18,7 @@
 #include <time.h>
 #include <sys/time.h>
 
-static const char *TAG = "SNTP";
+static const char *const tag = "SNTP";
 
 #define SNTP_RESYNC_INTERVAL_S 3600 // Re-sync every 1 hour (ESP32 RTC drift ~72ms/hr)
 
@@ -26,7 +26,7 @@ static bool s_synced = false;
 static sntp_sync_cb_t s_on_sync = NULL;
 static TaskHandle_t s_sntp_task = NULL;
 static EventGroupHandle_t s_eg = NULL;
-#define SNTP_BIT_RESYNC ((EventBits_t)(1 << 0))
+#define SNTP_BIT_RESYNC ((EventBits_t) (1 << 0))
 
 // Persists through deep sleep; 0 on first power-on
 RTC_DATA_ATTR static time_t s_last_sync_rtc = 0;
@@ -34,9 +34,9 @@ RTC_DATA_ATTR static time_t s_last_sync_rtc = 0;
 // ============================================================
 // Notification callback — fired by SNTP internally on time set
 // ============================================================
-static void time_sync_notification_cb(struct timeval *tv)
+static void time_sync_notification_cb(struct timeval *tv) // NOLINT(readability-non-const-parameter)
 {
-  ESP_LOGI(TAG, ">>> NTP time received! tv_sec=%lld", (long long)tv->tv_sec);
+  ESP_LOGI(tag, ">>> NTP time received! tv_sec=%lld", (long long) tv->tv_sec);
 }
 
 // ============================================================
@@ -50,7 +50,7 @@ static void log_synced_time(void)
   localtime_r(&now, &timeinfo);
   char buf[64];
   strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
-  ESP_LOGI(TAG, "Time synchronized: %s", buf);
+  ESP_LOGI(tag, "Time synchronized: %s", buf);
 }
 
 // ============================================================
@@ -66,7 +66,7 @@ static bool wait_for_sync(int max_retries)
     {
       return true;
     }
-    ESP_LOGI(TAG, "Sync poll %d/%d (ret=%s)", retry + 1, max_retries, esp_err_to_name(ret));
+    ESP_LOGI(tag, "Sync poll %d/%d (ret=%s)", retry + 1, max_retries, esp_err_to_name(ret));
   }
   return false;
 }
@@ -74,8 +74,10 @@ static bool wait_for_sync(int max_retries)
 // ============================================================
 // SNTP task — initial sync + periodic re-sync
 // ============================================================
-static void sntp_task(void *arg)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+static void sntp_task(void *arg) // NOLINT(readability-non-const-parameter)
 {
+  (void) arg;
   bool skip_initial = false;
 
   // --- Skip initial sync if waking from deep sleep within the resync interval ---
@@ -83,16 +85,20 @@ static void sntp_task(void *arg)
   {
     const time_t now = time(NULL);
     const time_t elapsed = now - s_last_sync_rtc;
-    if (elapsed >= 0 && elapsed < (time_t)SNTP_RESYNC_INTERVAL_S)
+    if (elapsed >= 0 && elapsed < (time_t) SNTP_RESYNC_INTERVAL_S)
     {
-      ESP_LOGI(TAG, "Deep sleep wake: last sync %lds ago, skip initial sync", (long)elapsed);
+      ESP_LOGI(tag, "Deep sleep wake: last sync %lds ago, skip initial sync", (long) elapsed);
       s_synced = true;
       if (s_on_sync)
+      {
         s_on_sync(SNTP_EVENT_SYNCED);
+      }
       // Wait remainder of current interval, then fall into re-sync loop
-      int64_t remain_s = (int64_t)SNTP_RESYNC_INTERVAL_S - (int64_t)elapsed;
+      const int64_t remain_s = (int64_t) SNTP_RESYNC_INTERVAL_S - (int64_t) elapsed;
       if (remain_s > 0)
-        xEventGroupWaitBits(s_eg, SNTP_BIT_RESYNC, pdTRUE, pdFALSE, pdMS_TO_TICKS((uint32_t)(remain_s * 1000)));
+      {
+        xEventGroupWaitBits(s_eg, SNTP_BIT_RESYNC, pdTRUE, pdFALSE, pdMS_TO_TICKS((uint32_t) (remain_s * 1000)));
+      }
       skip_initial = true;
     }
   }
@@ -101,8 +107,10 @@ static void sntp_task(void *arg)
   {
     // --- Initial sync ---
     if (s_on_sync)
+    {
       s_on_sync(SNTP_EVENT_SYNCING);
-    ESP_LOGI(TAG, "Waiting for NTP time sync...");
+    }
+    ESP_LOGI(tag, "Waiting for NTP time sync...");
 
     bool ok = wait_for_sync(15); // 15 × 2s = 30s max wait
     if (ok)
@@ -113,26 +121,32 @@ static void sntp_task(void *arg)
     }
     else
     {
-      ESP_LOGW(TAG, "NTP sync timeout after 30 seconds");
+      ESP_LOGW(tag, "NTP sync timeout after 30 seconds");
     }
 
     if (s_on_sync)
+    {
       s_on_sync(ok ? SNTP_EVENT_SYNCED : SNTP_EVENT_FAILED);
+    }
   }
 
   // --- Periodic re-sync loop ---
   // On first iteration after deep sleep wake, skip_initial=true means we already
   // waited out the remaining interval above, so go straight to re-sync.
-  while (1)
+  while (1) // NOLINT
   {
     if (!skip_initial)
+    {
       xEventGroupWaitBits(s_eg, SNTP_BIT_RESYNC, pdTRUE, pdFALSE, pdMS_TO_TICKS(SNTP_RESYNC_INTERVAL_S * 1000));
+    }
     skip_initial = false;
 
     if (s_on_sync)
+    {
       s_on_sync(SNTP_EVENT_SYNCING);
+    }
 
-    ESP_LOGI(TAG, "Re-syncing NTP (interval=%ds)...", SNTP_RESYNC_INTERVAL_S);
+    ESP_LOGI(tag, "Re-syncing NTP (interval=%ds)...", SNTP_RESYNC_INTERVAL_S);
     esp_sntp_restart();
 
     bool ok = wait_for_sync(5); // 5 × 2s = 10s max for re-sync
@@ -144,12 +158,14 @@ static void sntp_task(void *arg)
     }
     else
     {
-      ESP_LOGW(TAG, "NTP re-sync timeout");
+      ESP_LOGW(tag, "NTP re-sync timeout");
       s_synced = false;
     }
 
     if (s_on_sync)
+    {
       s_on_sync(ok ? SNTP_EVENT_SYNCED : SNTP_EVENT_FAILED);
+    }
   }
 }
 
@@ -157,7 +173,8 @@ static void sntp_task(void *arg)
 // Public API
 // ============================================================
 
-esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+esp_err_t sntp_sync_start(const sntp_sync_cb_t on_sync)
 {
   s_on_sync = on_sync;
   s_synced = false;
@@ -179,7 +196,7 @@ esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync)
   esp_err_t ret = esp_netif_sntp_init(&config);
   if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "esp_netif_sntp_init failed: %s", esp_err_to_name(ret));
+    ESP_LOGE(tag, "esp_netif_sntp_init failed: %s", esp_err_to_name(ret));
     return ret;
   }
 
@@ -187,19 +204,19 @@ esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync)
   // Note: CONFIG_LWIP_SNTP_MAX_SERVERS must be >= 3 in menuconfig
   // for fallback servers to take effect.
   // Path: Component config → LWIP → SNTP → Maximum number of NTP servers
-  ESP_LOGI(TAG, "SNTP server [0]: %s", SNTP_PRIMARY_SERVER);
+  ESP_LOGI(tag, "SNTP server [0]: %s", SNTP_PRIMARY_SERVER);
 
 #if CONFIG_LWIP_SNTP_MAX_SERVERS > 1
   esp_sntp_setservername(1, "pool.ntp.org");
-  ESP_LOGI(TAG, "SNTP server [1]: pool.ntp.org");
+  ESP_LOGI(tag, "SNTP server [1]: pool.ntp.org");
 #endif
 #if CONFIG_LWIP_SNTP_MAX_SERVERS > 2
   esp_sntp_setservername(2, "time.google.com");
-  ESP_LOGI(TAG, "SNTP server [2]: time.google.com");
+  ESP_LOGI(tag, "SNTP server [2]: time.google.com");
 #endif
 
 #if CONFIG_LWIP_SNTP_MAX_SERVERS <= 1
-  ESP_LOGW(TAG, "Only 1 NTP server slot! Set CONFIG_LWIP_SNTP_MAX_SERVERS=3 in menuconfig");
+  ESP_LOGW(tag, "Only 1 NTP server slot! Set CONFIG_LWIP_SNTP_MAX_SERVERS=3 in menuconfig");
 #endif
 
   s_eg = xEventGroupCreate();
@@ -213,11 +230,13 @@ esp_err_t sntp_sync_start(sntp_sync_cb_t on_sync)
 void sntp_sync_notify_connected(void)
 {
   if (!s_eg || !s_sntp_task)
+  {
     return;
+  }
   const time_t now = time(NULL);
   if (s_last_sync_rtc == 0 || difftime(now, s_last_sync_rtc) >= SNTP_RESYNC_INTERVAL_S)
   {
-    ESP_LOGI(TAG, "WiFi reconnected — waking SNTP for immediate resync");
+    ESP_LOGI(tag, "WiFi reconnected — waking SNTP for immediate resync");
     xEventGroupSetBits(s_eg, SNTP_BIT_RESYNC);
   }
 }
@@ -244,5 +263,5 @@ void sntp_sync_stop(void)
 
   esp_netif_sntp_deinit();
   s_synced = false;
-  ESP_LOGI(TAG, "SNTP client stopped");
+  ESP_LOGI(tag, "SNTP client stopped");
 }

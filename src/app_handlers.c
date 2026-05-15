@@ -15,7 +15,7 @@
 #include "prov_screen.h"
 #include "nav.h"
 
-static const char *TAG = "ZenClock";
+static const char *const tag = "ZenClock";
 
 // ============================================================
 // WiFi reconnect — exponential backoff timer
@@ -25,8 +25,10 @@ static esp_timer_handle_t s_reconnect_timer = NULL;
 static int s_reconnect_backoff_s = 30;
 static bool s_sntp_started = false;
 
+// NOLINTNEXTLINE(readability-non-const-parameter)
 static void reconnect_timer_cb(void *arg)
 {
+  (void) arg;
   wifi_manager_start();
 }
 
@@ -37,15 +39,17 @@ static void schedule_reconnect(void)
     const esp_timer_create_args_t args = {.callback = reconnect_timer_cb, .name = "wifi_rc"};
     esp_timer_create(&args, &s_reconnect_timer);
   }
-  esp_timer_start_once(s_reconnect_timer, (uint64_t)s_reconnect_backoff_s * 1000000ULL);
-  ESP_LOGI(TAG, "WiFi offline — retry in %ds", s_reconnect_backoff_s);
+  esp_timer_start_once(s_reconnect_timer, (uint64_t) s_reconnect_backoff_s * 1000000ULL);
+  ESP_LOGI(tag, "WiFi offline — retry in %ds", s_reconnect_backoff_s);
   s_reconnect_backoff_s = (s_reconnect_backoff_s * 2 > 300) ? 300 : s_reconnect_backoff_s * 2;
 }
 
 static void cancel_reconnect(void)
 {
   if (s_reconnect_timer)
+  {
     esp_timer_stop(s_reconnect_timer);
+  }
   s_reconnect_backoff_s = 30;
 }
 
@@ -60,7 +64,7 @@ static void do_reset_wifi(void)
   const esp_err_t ret = ble_provisioning_start();
   if (ret == ESP_ERR_INVALID_STATE)
   {
-    ESP_LOGW(TAG, "BLE memory released — rebooting into provisioning mode");
+    ESP_LOGW(tag, "BLE memory released — rebooting into provisioning mode");
     vTaskDelay(pdMS_TO_TICKS(200));
     esp_restart();
   }
@@ -85,14 +89,15 @@ void app_handlers_register_nav_callbacks(void)
 // Button handler
 // ============================================================
 
-void on_button_press(int btn_id, bsp_btn_event_t event)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void on_button_press(const int btn_id, const bsp_btn_event_t event)
 {
   deep_sleep_reset_timer();
 
   // Emergency: IO14 held ≥ 3s → reset WiFi + BLE provisioning (bypasses nav)
   if (event == BSP_BTN_EMERGENCY && btn_id == BSP_BTN_IO14)
   {
-    ESP_LOGW(TAG, "Emergency: resetting WiFi → BLE provisioning");
+    ESP_LOGW(tag, "Emergency: resetting WiFi → BLE provisioning");
     do_reset_wifi();
     return;
   }
@@ -103,7 +108,7 @@ void on_button_press(int btn_id, bsp_btn_event_t event)
     gpio_num_t other = (btn_id == BSP_BTN_BOOT) ? GPIO_NUM_14 : GPIO_NUM_0;
     if (gpio_get_level(other) == 0) // active-low: 0 = pressed
     {
-      ESP_LOGI(TAG, "Both buttons held — triggering deep sleep");
+      ESP_LOGI(tag, "Both buttons held — triggering deep sleep");
       deep_sleep_trigger();
       return;
     }
@@ -129,26 +134,27 @@ void on_button_press(int btn_id, bsp_btn_event_t event)
 // SNTP sync callback
 // ============================================================
 
-void on_sntp_sync(sntp_sync_event_t event)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void on_sntp_sync(const sntp_sync_event_t event)
 {
   switch (event)
   {
   case SNTP_EVENT_SYNCING:
-    ESP_LOGI(TAG, "NTP syncing...");
+    ESP_LOGI(tag, "NTP syncing...");
     lvgl_port_lock(0);
     status_bar_set_sntp_status(SNTP_STATUS_SYNCING);
     lvgl_port_unlock();
     break;
 
   case SNTP_EVENT_SYNCED:
-    ESP_LOGI(TAG, "NTP time synchronized!");
+    ESP_LOGI(tag, "NTP time synchronized!");
     lvgl_port_lock(0);
     status_bar_set_sntp_status(SNTP_STATUS_SYNCED);
     lvgl_port_unlock();
     break;
 
   case SNTP_EVENT_FAILED:
-    ESP_LOGW(TAG, "NTP sync failed — clock may show wrong time");
+    ESP_LOGW(tag, "NTP sync failed — clock may show wrong time");
     lvgl_port_lock(0);
     status_bar_set_sntp_status(SNTP_STATUS_FAILED);
     lvgl_port_unlock();
@@ -160,7 +166,8 @@ void on_sntp_sync(sntp_sync_event_t event)
 // BLE provisioning callback
 // ============================================================
 
-void on_ble_prov_event(ble_prov_event_t event, const char *ssid, const char *pass)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void on_ble_prov_event(const ble_prov_event_t event, const char *ssid, const char *pass)
 {
   switch (event)
   {
@@ -170,7 +177,7 @@ void on_ble_prov_event(ble_prov_event_t event, const char *ssid, const char *pas
     char prov_pass[9];
     ble_provisioning_get_device_name(dev_name, sizeof(dev_name));
     ble_provisioning_get_password(prov_pass, sizeof(prov_pass));
-    ESP_LOGI(TAG, "BLE provisioning active: %s", dev_name);
+    ESP_LOGI(tag, "BLE provisioning active: %s", dev_name);
     lvgl_port_lock(0);
     status_bar_set_wifi_status(WIFI_STATUS_PROVISIONING);
     prov_screen_show(dev_name, prov_pass);
@@ -179,12 +186,12 @@ void on_ble_prov_event(ble_prov_event_t event, const char *ssid, const char *pas
   }
 
   case BLE_PROV_CRED_RECEIVED:
-    ESP_LOGI(TAG, "BLE credentials received: SSID=\"%s\"", ssid ? ssid : "");
+    ESP_LOGI(tag, "BLE credentials received: SSID=\"%s\"", ssid ? ssid : "");
     wifi_manager_set_credential(ssid, pass);
     break;
 
   case BLE_PROV_SUCCESS:
-    ESP_LOGI(TAG, "BLE provisioning complete — starting WiFi");
+    ESP_LOGI(tag, "BLE provisioning complete — starting WiFi");
     lvgl_port_lock(0);
     prov_screen_hide();
     lvgl_port_unlock();
@@ -194,7 +201,7 @@ void on_ble_prov_event(ble_prov_event_t event, const char *ssid, const char *pas
     break;
 
   case BLE_PROV_FAILED:
-    ESP_LOGW(TAG, "BLE provisioning failed — bad credentials, waiting for retry");
+    ESP_LOGW(tag, "BLE provisioning failed — bad credentials, waiting for retry");
     wifi_manager_clear_credential();
     break;
 
@@ -207,7 +214,8 @@ void on_ble_prov_event(ble_prov_event_t event, const char *ssid, const char *pas
 // WiFi event callback
 // ============================================================
 
-void on_wifi_event(wifi_manager_event_t event)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void on_wifi_event(const wifi_manager_event_t event)
 {
   switch (event)
   {
@@ -224,7 +232,7 @@ void on_wifi_event(wifi_manager_event_t event)
     break;
 
   case WIFI_MGR_GOT_IP:
-    ESP_LOGI(TAG, "WiFi got IP — verifying internet...");
+    ESP_LOGI(tag, "WiFi got IP — verifying internet...");
     lvgl_port_lock(0);
     status_bar_set_wifi_status(WIFI_STATUS_VERIFYING);
     lvgl_port_unlock();
@@ -237,23 +245,23 @@ void on_wifi_event(wifi_manager_event_t event)
     lvgl_port_unlock();
     if (!s_sntp_started)
     {
-      ESP_LOGI(TAG, "WiFi verified online — starting NTP sync...");
+      ESP_LOGI(tag, "WiFi verified online — starting NTP sync...");
       sntp_sync_start(on_sntp_sync);
       s_sntp_started = true;
     }
     else
     {
-      ESP_LOGI(TAG, "WiFi reconnected — notifying SNTP");
+      ESP_LOGI(tag, "WiFi reconnected — notifying SNTP");
       sntp_sync_notify_connected();
     }
     break;
 
   case WIFI_MGR_SCAN_DONE:
-    ESP_LOGI(TAG, "WiFi scan complete");
+    ESP_LOGI(tag, "WiFi scan complete");
     break;
 
   case WIFI_MGR_NO_CRED:
-    ESP_LOGW(TAG, "No WiFi credential stored — starting BLE provisioning");
+    ESP_LOGW(tag, "No WiFi credential stored — starting BLE provisioning");
     wifi_manager_stop();
     lvgl_port_lock(0);
     status_bar_set_wifi_status(WIFI_STATUS_PROVISIONING);
@@ -264,7 +272,7 @@ void on_wifi_event(wifi_manager_event_t event)
   case WIFI_MGR_DISCONNECTED:
   case WIFI_MGR_NO_MATCH:
   case WIFI_MGR_ALL_FAILED:
-    ESP_LOGW(TAG, "WiFi unavailable (event=%d) — will retry with backoff", (int)event);
+    ESP_LOGW(tag, "WiFi unavailable (event=%d) — will retry with backoff", (int) event);
     lvgl_port_lock(0);
     status_bar_set_wifi_status(WIFI_STATUS_DISCONNECTED);
     lvgl_port_unlock();

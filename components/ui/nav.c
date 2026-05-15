@@ -12,7 +12,7 @@
 
 #include <esp_log.h>
 
-static const char *TAG = "nav";
+static const char *const tag = "nav";
 
 // ============================================================
 // State
@@ -34,7 +34,7 @@ static nav_action_cb_t s_reset_wifi_cb = NULL;
 static nav_action_cb_t s_sleep_cb = NULL;
 
 // Settings item indices for action routing
-#define SETTINGS_IDX_SLEEP_NOW 5
+#define SETTINGS_IDX_SLEEP_NOW  5
 #define SETTINGS_IDX_RESET_WIFI 6
 
 // ============================================================
@@ -49,7 +49,7 @@ static void destroy_current_screen(void)
     clock_face_destroy();
     status_bar_destroy();
     break;
-  case SCR_MENU:
+  case SCR_MENU: // NOLINT(*-branch-clone)
     // menu_screen has no timers, but destroy status bar
     status_bar_destroy();
     break;
@@ -77,7 +77,7 @@ static void show_clock_screen(void)
     lv_obj_delete(old);
   }
 
-  ESP_LOGI(TAG, "Screen: Clock");
+  ESP_LOGI(tag, "Screen: Clock");
 }
 
 static void show_menu_screen(void)
@@ -97,7 +97,7 @@ static void show_menu_screen(void)
     lv_obj_delete(old);
   }
 
-  ESP_LOGI(TAG, "Screen: Menu");
+  ESP_LOGI(tag, "Screen: Menu");
 }
 
 static void show_settings_screen(void)
@@ -117,7 +117,7 @@ static void show_settings_screen(void)
     lv_obj_delete(old);
   }
 
-  ESP_LOGI(TAG, "Screen: Settings");
+  ESP_LOGI(tag, "Screen: Settings");
 }
 
 // ============================================================
@@ -130,7 +130,7 @@ void nav_init(void)
   s_menu_focus = 0;
   s_settings_focus = 0;
   show_clock_screen();
-  ESP_LOGI(TAG, "Navigation initialized — Clock screen loaded");
+  ESP_LOGI(tag, "Navigation initialized — Clock screen loaded");
 }
 
 void nav_register_reset_wifi_cb(nav_action_cb_t cb)

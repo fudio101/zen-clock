@@ -17,26 +17,26 @@ static uint8_t s_orbit_step = 0;
 
 // Pixel orbital shift: 2px range, 4 positions, 7-min cycle
 // Prevents LCD image retention on static background regions at screen edges
-static const int8_t ORBIT_X[4] = {0, 2, 2, 0};
-static const int8_t ORBIT_Y[4] = {0, 0, 2, 2};
+static constexpr int8_t orbit_x[4] = {0, 2, 2, 0};
+static constexpr int8_t orbit_y[4] = {0, 0, 2, 2};
 
 // ============================================================
 // Orbital shift callback — fires every 7 min, cycles 4 offset positions
 // ============================================================
-static void orbit_timer_cb(lv_timer_t *timer)
+static void orbit_timer_cb(lv_timer_t *timer) // NOLINT(readability-non-const-parameter)
 {
-  (void)timer;
+  (void) timer;
   s_orbit_step = (s_orbit_step + 1) % 4;
-  lv_obj_align(s_time_label, LV_ALIGN_CENTER, ORBIT_X[s_orbit_step], -12 + ORBIT_Y[s_orbit_step]);
+  lv_obj_align(s_time_label, LV_ALIGN_CENTER, orbit_x[s_orbit_step], -12 + orbit_y[s_orbit_step]);
   lv_obj_align_to(s_date_label, s_time_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
 }
 
 // ============================================================
 // Timer callback — runs inside lv_timer_handler() on LVGL task
 // ============================================================
-static void clock_timer_cb(lv_timer_t *timer)
+static void clock_timer_cb(lv_timer_t *timer) // NOLINT(readability-non-const-parameter)
 {
-  (void)timer;
+  (void) timer;
   char time_buf[16];
   char date_buf[16];
 

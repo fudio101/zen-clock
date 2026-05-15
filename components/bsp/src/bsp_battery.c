@@ -12,10 +12,10 @@
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 
-static const char *TAG = "bsp_battery";
+static const char *const tag = "bsp_battery";
 
 // Battery ADC channel (GPIO4 = ADC1_CH3)
-#define BAT_ADC_UNIT ADC_UNIT_1
+#define BAT_ADC_UNIT    ADC_UNIT_1
 #define BAT_ADC_CHANNEL ADC_CHANNEL_3
 
 // USB detection: voltage >= 4500mV (after ×2 correction) indicates USB power
@@ -40,9 +40,10 @@ static float volts_to_percentage(float volts)
 // ============================================================
 void bsp_battery_setup(void)
 {
-  ESP_LOGI(TAG, "Configuring battery monitor...");
+  ESP_LOGI(tag, "Configuring battery monitor...");
 
   // ADC unit
+  // NOLINTNEXTLINE(*-invalid-enum-default-initialization)
   const adc_oneshot_unit_init_cfg_t adc_cfg = {
       .unit_id = BAT_ADC_UNIT,
   };
@@ -63,17 +64,18 @@ void bsp_battery_setup(void)
   };
   ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_cfg, &s_adc_cali_handle));
 
-  ESP_LOGI(TAG, "Battery monitor ready (GPIO%d, ADC1_CH%d)", PIN_BAT_ADC, BAT_ADC_CHANNEL);
+  ESP_LOGI(tag, "Battery monitor ready (GPIO%d, ADC1_CH%d)", PIN_BAT_ADC, BAT_ADC_CHANNEL);
 }
 
 // ============================================================
 // Public API
 // ============================================================
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 int bsp_battery_get_voltage(void)
 {
   if (!s_adc_handle)
   {
-    ESP_LOGW(TAG, "Battery ADC not initialized");
+    ESP_LOGW(tag, "Battery ADC not initialized");
     return -1;
   }
 
@@ -81,14 +83,14 @@ int bsp_battery_get_voltage(void)
   esp_err_t err = adc_oneshot_read(s_adc_handle, BAT_ADC_CHANNEL, &adc_raw);
   if (err != ESP_OK)
   {
-    ESP_LOGE(TAG, "ADC read failed: %s", esp_err_to_name(err));
+    ESP_LOGE(tag, "ADC read failed: %s", esp_err_to_name(err));
     return -1;
   }
 
   err = adc_cali_raw_to_voltage(s_adc_cali_handle, adc_raw, &voltage);
   if (err != ESP_OK)
   {
-    ESP_LOGE(TAG, "ADC calibration failed: %s", esp_err_to_name(err));
+    ESP_LOGE(tag, "ADC calibration failed: %s", esp_err_to_name(err));
     return -1;
   }
 
@@ -97,17 +99,21 @@ int bsp_battery_get_voltage(void)
 
 int bsp_battery_get_percentage(void)
 {
-  int mv = bsp_battery_get_voltage();
+  const int mv = bsp_battery_get_voltage();
   if (mv < 0)
   {
     return -1;
   }
-  float pct = volts_to_percentage((float)mv / 1000.0f);
-  int result = (int)ceilf(pct);
+  float pct = volts_to_percentage((float) mv / 1000.0f);
+  int result = (int) ceilf(pct);
   if (result < 0)
+  {
     result = 0;
+  }
   if (result > 100)
+  {
     result = 100;
+  }
   return result;
 }
 
