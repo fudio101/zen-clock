@@ -13,6 +13,7 @@
 //   ACTION — executes on select, no edit mode (Sleep Now, Reset Wi-Fi)
 
 #include "settings_screen.h"
+#include "ui_utils.h"
 #include "settings.h"
 #include "deep_sleep.h"
 #include "bsp.h"
@@ -350,7 +351,7 @@ void settings_screen_create(lv_obj_t *parent)
 
 void settings_screen_focus_prev(void)
 {
-  s_focus = (s_focus - 1 + SETTINGS_ITEM_COUNT) % SETTINGS_ITEM_COUNT;
+  s_focus = ui_circ_prev(s_focus, SETTINGS_ITEM_COUNT);
   if (s_focus == SETTINGS_ITEM_COUNT - 1)
   {
     s_scroll = SETTINGS_ITEM_COUNT - SETTINGS_VISIBLE; // wrap: jump to bottom
@@ -365,7 +366,7 @@ void settings_screen_focus_prev(void)
 
 void settings_screen_focus_next(void)
 {
-  s_focus = (s_focus + 1) % SETTINGS_ITEM_COUNT;
+  s_focus = ui_circ_next(s_focus, SETTINGS_ITEM_COUNT);
   if (s_focus == 0)
   {
     s_scroll = 0; // wrap: jump to top

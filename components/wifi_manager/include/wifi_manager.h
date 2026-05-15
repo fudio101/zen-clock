@@ -56,6 +56,7 @@ extern "C"
   void wifi_manager_set_callback(wifi_event_cb_t cb);
   wifi_state_t wifi_manager_get_state(void);
   const char *wifi_manager_get_ssid(void);
+  const char *wifi_manager_get_ip_str(void);
 
   // ============================================================
   // Single-credential API

@@ -7,12 +7,14 @@
 //   Item list starting at y=48, each item 24px tall
 
 #include "menu_screen.h"
+#include "ui_utils.h"
 
 // ============================================================
 // Menu items — only implemented features appear here
 // ============================================================
 static const char *s_menu_labels[] = {
     "Settings",
+    "System Info",
 };
 #define MENU_ITEM_COUNT (sizeof(s_menu_labels) / sizeof(s_menu_labels[0]))
 
@@ -97,20 +99,14 @@ void menu_screen_create(lv_obj_t *parent)
 
 void menu_screen_focus_prev(void)
 {
-  if (s_focus > 0)
-  {
-    s_focus--;
-    update_focus_visual();
-  }
+  s_focus = ui_circ_prev(s_focus, (int) MENU_ITEM_COUNT);
+  update_focus_visual();
 }
 
 void menu_screen_focus_next(void)
 {
-  if (s_focus < (int) MENU_ITEM_COUNT - 1)
-  {
-    s_focus++;
-    update_focus_visual();
-  }
+  s_focus = ui_circ_next(s_focus, (int) MENU_ITEM_COUNT);
+  update_focus_visual();
 }
 
 int menu_screen_get_focus(void)

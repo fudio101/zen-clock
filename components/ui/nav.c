@@ -9,6 +9,7 @@
 #include "status_bar.h"
 #include "menu_screen.h"
 #include "settings_screen.h"
+#include "device_info_screen.h"
 
 #include <esp_log.h>
 
@@ -23,6 +24,7 @@ typedef enum
   SCR_MENU,
   SCR_SETTINGS_LIST,
   SCR_SETTINGS_EDIT,
+  SCR_DEVICE_INFO,
 } screen_state_t;
 
 static screen_state_t s_state = SCR_CLOCK;
@@ -55,6 +57,10 @@ static void destroy_current_screen(void)
     break;
   case SCR_SETTINGS_LIST:
   case SCR_SETTINGS_EDIT:
+    status_bar_destroy();
+    break;
+  case SCR_DEVICE_INFO:
+    device_info_screen_destroy();
     status_bar_destroy();
     break;
   }
@@ -120,6 +126,26 @@ static void show_settings_screen(void)
   ESP_LOGI(tag, "Screen: Settings");
 }
 
+static void show_device_info_screen(void)
+{
+  destroy_current_screen();
+
+  lv_obj_t *scr = lv_obj_create(NULL);
+  lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+
+  status_bar_create(scr);
+  device_info_screen_create(scr);
+
+  lv_obj_t *old = lv_screen_active();
+  lv_screen_load(scr);
+  if (old)
+  {
+    lv_obj_delete(old);
+  }
+
+  ESP_LOGI(tag, "Screen: System Info");
+}
+
 // ============================================================
 // Public API
 // ============================================================
@@ -171,12 +197,16 @@ void nav_handle_action(nav_action_t action)
     else if (action == NAV_ACTION_SELECT)
     {
       s_menu_focus = menu_screen_get_focus();
-      // Currently item 0 = Settings (only item)
       if (s_menu_focus == 0)
       {
         show_settings_screen();
         settings_screen_set_focus(s_settings_focus);
         s_state = SCR_SETTINGS_LIST;
+      }
+      else if (s_menu_focus == 1)
+      {
+        show_device_info_screen();
+        s_state = SCR_DEVICE_INFO;
       }
     }
     else if (action == NAV_ACTION_BACK)
@@ -214,6 +244,24 @@ void nav_handle_action(nav_action_t action)
     else if (action == NAV_ACTION_BACK)
     {
       s_settings_focus = settings_screen_get_focus();
+      show_menu_screen();
+      menu_screen_set_focus(s_menu_focus);
+      s_state = SCR_MENU;
+    }
+    break;
+
+  // ========== DEVICE INFO ==========
+  case SCR_DEVICE_INFO:
+    if (action == NAV_ACTION_UP)
+    {
+      device_info_screen_scroll_up();
+    }
+    else if (action == NAV_ACTION_DOWN)
+    {
+      device_info_screen_scroll_down();
+    }
+    else if (action == NAV_ACTION_BACK)
+    {
       show_menu_screen();
       menu_screen_set_focus(s_menu_focus);
       s_state = SCR_MENU;

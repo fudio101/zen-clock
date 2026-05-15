@@ -46,6 +46,7 @@ static esp_netif_t *s_sta_netif = NULL;
 static char s_ssid[SSID_MAX_LEN] = {0};
 static char s_pass[PASS_MAX_LEN] = {0};
 static char s_connected_ssid[SSID_MAX_LEN] = {0};
+static char s_ip_str[16] = {0};
 
 // Matched AP record — set in SCANNING, used in CONNECTING
 static wifi_ap_record_t s_match_ap;
@@ -131,8 +132,9 @@ static void wifi_event_handler(void *arg, // NOLINT(readability-non-const-parame
 
     case WIFI_EVENT_STA_DISCONNECTED:
     {
-      wifi_event_sta_disconnected_t *evt = (wifi_event_sta_disconnected_t *) data;
+      const wifi_event_sta_disconnected_t *evt = data;
       ESP_LOGW(tag, "Disconnected (reason=%d)", evt->reason);
+      s_ip_str[0] = '\0';
       xEventGroupSetBits(s_event_group, BIT_DISCONNECTED);
       break;
     }
@@ -145,6 +147,7 @@ static void wifi_event_handler(void *arg, // NOLINT(readability-non-const-parame
   {
     const ip_event_got_ip_t *evt = (ip_event_got_ip_t *) data;
     ESP_LOGI(tag, "Got IP: " IPSTR, IP2STR(&evt->ip_info.ip));
+    snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&evt->ip_info.ip));
     xEventGroupSetBits(s_event_group, BIT_GOT_IP);
   }
 }
@@ -694,4 +697,9 @@ wifi_state_t wifi_manager_get_state(void)
 const char *wifi_manager_get_ssid(void)
 {
   return s_connected_ssid[0] ? s_connected_ssid : NULL;
+}
+
+const char *wifi_manager_get_ip_str(void)
+{
+  return s_ip_str[0] ? s_ip_str : NULL;
 }
