@@ -1,9 +1,28 @@
 # Name,   Type, SubType, Offset,  Size, Flags
-# Lưu trữ cấu hình WiFi, Bluetooth, v.v.
+#
+# Flash layout — LilyGo T-Display-S3 (16MB flash, ESP32-S3)
+# Total: 0x000000 – 0xFFFFFF (16MB)
+#
+# ── System ──────────────────────────────────────────────
+# nvs     : Non-volatile storage for WiFi credentials and app settings
+#           (theme, brightness, sleep timeout). 20KB is sufficient for
+#           small key-value pairs used by this project.
+# otadata : OTA metadata — tracks which app slot (app0/app1) is active.
+#           Required whenever dual OTA partitions are present.
 nvs,      data, nvs,     0x9000,  0x5000,
 otadata,  data, ota,     0xe000,  0x2000,
-# Phân vùng chứa Code (Cho phép code nặng tới 4MB)
+#
+# ── Application (OTA) ───────────────────────────────────
+# Dual 4MB slots for over-the-air firmware updates.
+# Current firmware is ~1.72MB (text+data), leaving ~2.28MB headroom
+# per slot for future growth (BLE + LVGL + ESP-IDF stack).
+# app0 is the primary slot flashed via USB; app1 is the OTA target.
 app0,     app,  ota_0,   0x10000, 4M,
 app1,     app,  ota_1,   ,        4M,
-# Phân vùng lưu trữ Data (Chứa ảnh, font chữ, file hệ thống - 7MB)
-spiffs,   data, spiffs,  ,        7M,
+#
+# ── Filesystem (SPIFFS) ─────────────────────────────────
+# 7.94MB (0x7F0000) — fills flash to the exact 16MB boundary.
+# Reserved for image assets (clock face bitmaps, UI graphics).
+# Erase this partition before uploading new SPIFFS image via:
+#   pio run -t uploadfs
+spiffs,   data, spiffs,  ,        0x7F0000,
