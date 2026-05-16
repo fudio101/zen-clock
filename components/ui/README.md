@@ -26,27 +26,60 @@ the other widget constructors.
 
 ```
 ui/
-├── ui.h / ui.c                           ← Public entry point
+├── ui.h / ui.c                           ← Public entry point + theme state
 ├── nav.h / nav.c                         ← Navigation state machine
-├── clock_face.h / clock_face_text.c      ← Clock face widget (text style)
+├── clock_face.h / clock_face_text.c      ← Clock face widget (DS-Digital font)
 ├── status_bar.h / status_bar.c           ← Status bar widget
 ├── prov_screen.h / prov_screen.c         ← BLE provisioning overlay
 ├── menu_screen.h / menu_screen.c         ← Menu screen
 ├── settings_screen.h / settings_screen.c ← Settings screen with inline edit
+├── fonts/
+│   ├── DS-DIGIT.TTF                      ← DS-Digital source font (7-segment style)
+│   ├── DS-DIGI.TTF / DS-DIGIB.TTF / DS-DIGII.TTF ← other weights (unused)
+│   ├── DIGITAL.TXT                       ← font license
+│   ├── lv_font_ds_digital_48.h           ← generated font declaration
+│   └── lv_font_ds_digital_48.c           ← generated LVGL bitmap (4bpp, size 48)
 └── CMakeLists.txt
 ```
 
 The clock face is swappable: replace `clock_face_text.c` with another implementation in `CMakeLists.txt` without
 touching any header.
 
+### Regenerating the font
+
+```bash
+lv_font_conv --bpp 4 --size 48 \
+  --font components/ui/fonts/DS-DIGIT.TTF \
+  --range 0x30-0x39,0x3A,0x2F,0x20 \
+  --format lvgl \
+  --output components/ui/fonts/lv_font_ds_digital_48.c \
+  --no-compress
+```
+
+After regenerating, replace the `#ifdef LV_LVGL_H_INCLUDE_SIMPLE … #endif` include block at the top with a plain `#include "lvgl.h"`.
+
 ## Public APIs
 
 ### `ui.h` — entry point
 
 ```c
-void ui_init(bool is_light);      // init LVGL theme, call nav_init()
-void ui_set_theme(bool is_light); // switch light/dark theme
+void ui_init(bool is_light);             // init LVGL theme + shared bg style, call nav_init()
+void ui_set_theme(bool is_light);        // switch light/dark theme; updates bg on all screens instantly
+bool ui_is_light_theme(void);            // query current theme state
+void ui_apply_screen_bg(lv_obj_t *scr); // attach shared bg style to a new screen object
 ```
+
+Screen background colors are managed via a shared `lv_style_t` so `ui_set_theme()` calls
+`lv_obj_report_style_change()` once and LVGL refreshes all screens automatically — no manual
+per-screen updates needed.
+
+**Theme color palette:**
+
+| Element      | Light (`#e6e6e6` bg) | Dark (`#0d0d0d` bg) |
+|--------------|----------------------|---------------------|
+| Clock digits | `#333333`            | `#01ddff`           |
+| Date label   | `#666666`            | `#007a99`           |
+| Screen bg    | `#e6e6e6`            | `#0d0d0d`           |
 
 ### `nav.h` — navigation
 
@@ -142,7 +175,8 @@ Action items (Sleep Now, Reset WiFi): SELECT fires callback, no edit mode
 ## Key Constraints
 
 - **LVGL timers only** for UI updates — never FreeRTOS tasks.
-- **No hardcoded colors** — use theme-aware LVGL styles (light/dark support).
+- **Shared styles for theme colors** — screen bg uses a single `lv_style_t`; inline `lv_obj_set_style_*` calls per-object won't auto-update on theme switch.
 - **LVGL lock required** — all external LVGL calls need `lvgl_port_lock(0)` / `lvgl_port_unlock()`.
-- **Nav owns screen lifecycle** — do not call widget constructors from outside `nav.c`.
+- **Nav owns screen lifecycle** — do not call widget constructors from outside `nav.c`. Always call `ui_apply_screen_bg(scr)` after `lv_obj_create(NULL)` in `nav.c`.
 - **Clock face is swappable** — swap `clock_face_text.c` in `CMakeLists.txt`; `clock_face.h` interface stays the same.
+- **Clock text colors** are set at `clock_face_create()` time via `ui_is_light_theme()` — they update on next screen creation after a theme change, not live.

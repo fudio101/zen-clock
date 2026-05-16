@@ -1,35 +1,29 @@
 // SPDX-License-Identifier: MIT
-// ZenClock — Text-based clock face (Montserrat 48 time, Montserrat 14 date)
+// ZenClock — Text-based clock face (DS-Digital 48, fixed-width digit containers)
+//
+// Colors follow the global theme (ui_is_light_theme):
+//   light: digit #333333, date #666666, background handled by screen (nav.c)
+//   dark:  digit #01ddff, date #007a99, background handled by screen (nav.c)
+//
+// Fixed-width layout: HH(50) + :(12) + MM(50) + :(12) + SS(50) = 174px total
+// DS-Digital adv_w: digits 391/16 = 24.4px → pair 48.9px → DIGIT_W=50 (1.1px margin)
+//                   colon  170/16 = 10.6px             → COLON_W=12 (1.4px margin)
 
 #include "clock_face.h"
+#include "ui.h"
+#include "fonts/lv_font_ds_digital_48.h"
 
 #include <time.h>
 #include <sys/time.h>
 
-// ============================================================
-// Private state
-// ============================================================
-static lv_obj_t *s_time_label = NULL;
+#define DIGIT_W 50
+#define COLON_W 12
+
+static lv_obj_t *s_hh_label = NULL;
+static lv_obj_t *s_mm_label = NULL;
+static lv_obj_t *s_ss_label = NULL;
 static lv_obj_t *s_date_label = NULL;
 static lv_timer_t *s_clock_timer = NULL;
-static lv_timer_t *s_orbit_timer = NULL;
-static uint8_t s_orbit_step = 0;
-
-// Pixel orbital shift: 2px range, 4 positions, 7-min cycle
-// Prevents LCD image retention on static background regions at screen edges
-static constexpr int8_t orbit_x[4] = {0, 2, 2, 0};
-static constexpr int8_t orbit_y[4] = {0, 0, 2, 2};
-
-// ============================================================
-// Orbital shift callback — fires every 7 min, cycles 4 offset positions
-// ============================================================
-static void orbit_timer_cb(lv_timer_t *timer) // NOLINT(readability-non-const-parameter)
-{
-  (void) timer;
-  s_orbit_step = (s_orbit_step + 1) % 4;
-  lv_obj_align(s_time_label, LV_ALIGN_CENTER, orbit_x[s_orbit_step], -12 + orbit_y[s_orbit_step]);
-  lv_obj_align_to(s_date_label, s_time_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
-}
 
 // ============================================================
 // Timer callback — runs inside lv_timer_handler() on LVGL task
@@ -37,18 +31,39 @@ static void orbit_timer_cb(lv_timer_t *timer) // NOLINT(readability-non-const-pa
 static void clock_timer_cb(lv_timer_t *timer) // NOLINT(readability-non-const-parameter)
 {
   (void) timer;
-  char time_buf[16];
-  char date_buf[16];
 
   time_t now = time(NULL);
   struct tm timeinfo;
   localtime_r(&now, &timeinfo);
 
-  strftime(time_buf, sizeof(time_buf), "%H:%M:%S", &timeinfo);
-  strftime(date_buf, sizeof(date_buf), "%d/%m/%Y", &timeinfo);
+  char buf[12];
 
-  lv_label_set_text(s_time_label, time_buf);
-  lv_label_set_text(s_date_label, date_buf);
+  (void) strftime(buf, sizeof(buf), "%H", &timeinfo);
+  lv_label_set_text(s_hh_label, buf);
+
+  (void) strftime(buf, sizeof(buf), "%M", &timeinfo);
+  lv_label_set_text(s_mm_label, buf);
+
+  (void) strftime(buf, sizeof(buf), "%S", &timeinfo);
+  lv_label_set_text(s_ss_label, buf);
+
+  (void) strftime(buf, sizeof(buf), "%d/%m/%Y", &timeinfo);
+  lv_label_set_text(s_date_label, buf);
+}
+
+// ============================================================
+// Helper — create one fixed-width digit or colon label
+// ============================================================
+static lv_obj_t *make_segment(lv_obj_t *parent, int32_t w, const char *init, lv_color_t color)
+{
+  lv_obj_t *label = lv_label_create(parent);
+  lv_obj_set_width(label, w);
+  lv_obj_set_height(label, LV_SIZE_CONTENT);
+  lv_obj_set_style_text_font(label, &lv_font_ds_digital_48, 0);
+  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(label, color, 0);
+  lv_label_set_text(label, init);
+  return label;
 }
 
 // ============================================================
@@ -56,31 +71,37 @@ static void clock_timer_cb(lv_timer_t *timer) // NOLINT(readability-non-const-pa
 // ============================================================
 void clock_face_create(lv_obj_t *parent)
 {
-  // --- Time label (center, large font, fixed width to prevent artifacts) ---
-  s_time_label = lv_label_create(parent);
-  lv_obj_set_width(s_time_label, 260);
-  lv_obj_set_height(s_time_label, LV_SIZE_CONTENT);
-  lv_obj_set_style_text_font(s_time_label, &lv_font_montserrat_48, 0);
-  lv_obj_set_style_text_align(s_time_label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(s_time_label, LV_ALIGN_CENTER, 0, -12);
-  lv_label_set_text(s_time_label, "00:00:00");
+  bool light = ui_is_light_theme();
+  lv_color_t digit_color = light ? lv_color_hex(0x333333) : lv_color_hex(0x01ddff);
+  lv_color_t date_color = light ? lv_color_hex(0x666666) : lv_color_hex(0x007a99);
 
-  // --- Date label (below time, smaller muted text, fixed width) ---
+  // Row container: fixed total width = DIGIT_W*3 + COLON_W*2
+  lv_obj_t *time_row = lv_obj_create(parent);
+  lv_obj_remove_style_all(time_row);
+  lv_obj_set_size(time_row, DIGIT_W * 3 + COLON_W * 2, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(time_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(time_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_all(time_row, 0, 0);
+  lv_obj_set_style_pad_column(time_row, 0, 0);
+  lv_obj_align(time_row, LV_ALIGN_CENTER, 0, -12);
+
+  s_hh_label = make_segment(time_row, DIGIT_W, "00", digit_color);
+  make_segment(time_row, COLON_W, ":", digit_color);
+  s_mm_label = make_segment(time_row, DIGIT_W, "00", digit_color);
+  make_segment(time_row, COLON_W, ":", digit_color);
+  s_ss_label = make_segment(time_row, DIGIT_W, "00", digit_color);
+
+  // Date label below the time row
   s_date_label = lv_label_create(parent);
-  lv_obj_set_width(s_date_label, 260);
+  lv_obj_set_width(s_date_label, LV_PCT(100));
   lv_obj_set_height(s_date_label, LV_SIZE_CONTENT);
   lv_obj_set_style_text_align(s_date_label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_color(s_date_label, lv_palette_main(LV_PALETTE_GREY), 0);
-  lv_obj_align_to(s_date_label, s_time_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
+  lv_obj_set_style_text_color(s_date_label, date_color, 0);
+  lv_obj_align_to(s_date_label, time_row, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
   lv_label_set_text(s_date_label, "--/--/----");
 
-  // --- LVGL timer: update every 1 second ---
   s_clock_timer = lv_timer_create(clock_timer_cb, 1000, NULL);
-  lv_timer_ready(s_clock_timer); // Fire immediately on first tick
-
-  // --- Orbital shift: 7-min period, prevents LCD image retention at screen edges ---
-  s_orbit_step = 0;
-  s_orbit_timer = lv_timer_create(orbit_timer_cb, 7 * 60 * 1000, NULL);
+  lv_timer_ready(s_clock_timer);
 }
 
 void clock_face_destroy(void)
@@ -90,11 +111,8 @@ void clock_face_destroy(void)
     lv_timer_delete(s_clock_timer);
     s_clock_timer = NULL;
   }
-  if (s_orbit_timer)
-  {
-    lv_timer_delete(s_orbit_timer);
-    s_orbit_timer = NULL;
-  }
-  s_time_label = NULL;
+  s_hh_label = NULL;
+  s_mm_label = NULL;
+  s_ss_label = NULL;
   s_date_label = NULL;
 }

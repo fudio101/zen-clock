@@ -5,6 +5,7 @@
 // All functions must be called while holding the LVGL port lock.
 
 #include "nav.h"
+#include "ui.h"
 #include "clock_face.h"
 #include "status_bar.h"
 #include "menu_screen.h"
@@ -72,6 +73,7 @@ static void show_clock_screen(void)
 
   lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+  ui_apply_screen_bg(scr);
 
   clock_face_create(scr);
   status_bar_create(scr);
@@ -92,6 +94,7 @@ static void show_menu_screen(void)
 
   lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+  ui_apply_screen_bg(scr);
 
   status_bar_create(scr);
   menu_screen_create(scr);
@@ -112,6 +115,7 @@ static void show_settings_screen(void)
 
   lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+  ui_apply_screen_bg(scr);
 
   status_bar_create(scr);
   settings_screen_create(scr);
@@ -132,6 +136,7 @@ static void show_device_info_screen(void)
 
   lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+  ui_apply_screen_bg(scr);
 
   status_bar_create(scr);
   device_info_screen_create(scr);
