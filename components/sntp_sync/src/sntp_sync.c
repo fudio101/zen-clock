@@ -241,6 +241,16 @@ void sntp_sync_notify_connected(void)
   }
 }
 
+void sntp_sync_force_resync(void)
+{
+  if (!s_eg || !s_sntp_task)
+  {
+    return;
+  }
+  ESP_LOGI(tag, "Manual resync requested — forcing immediate NTP sync");
+  xEventGroupSetBits(s_eg, SNTP_BIT_RESYNC);
+}
+
 bool sntp_sync_is_synced(void)
 {
   return s_synced;

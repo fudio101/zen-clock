@@ -71,6 +71,42 @@ extern "C"
    */
   void settings_set_sleep_s(uint8_t s);
 
+  /**
+   * @brief Get time format. true = 24H (default), false = 12H.
+   */
+  bool settings_get_time_format_24h(void);
+
+  /**
+   * @brief Store time format to NVS.
+   */
+  void settings_set_time_format_24h(bool is_24h);
+
+  /**
+   * @brief Get show-seconds setting. true = show (default), false = hide.
+   */
+  bool settings_get_show_seconds(void);
+
+  /**
+   * @brief Store show-seconds setting to NVS.
+   */
+  void settings_set_show_seconds(bool show);
+
+  /**
+   * @brief Get timezone UTC offset (-12..+14). Default 7 (UTC+7).
+   */
+  int8_t settings_get_timezone_offset(void);
+
+  /**
+   * @brief Store timezone UTC offset to NVS.
+   */
+  void settings_set_timezone_offset(int8_t offset);
+
+  /**
+   * @brief Apply timezone offset to the system (setenv + tzset).
+   * Call on boot and whenever the setting changes.
+   */
+  void settings_apply_timezone(int8_t offset);
+
 #ifdef __cplusplus
 }
 #endif

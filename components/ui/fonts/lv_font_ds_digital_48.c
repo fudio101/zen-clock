@@ -1,9 +1,8 @@
 /*******************************************************************************
  * Size: 48 px
  * Bpp: 4
- * Opts: --bpp 4 --size 48 --font /Users/nguyen.ndt/Projects/zen-clock/components/ui/fonts/DS-DIGIT.TTF --range
- * 0x30-0x39,0x3A,0x2F,0x20 --format lvgl --output
- * /Users/nguyen.ndt/Projects/zen-clock/components/ui/fonts/lv_font_ds_digital_48.c --no-compress
+ * Opts: --bpp 4 --size 48 --font components/ui/fonts/DS-DIGIT.TTF --range 0x30-0x39,0x3A,0x2F,0x20 --format lvgl
+ * --output components/ui/fonts/lv_font_ds_digital_48.c --no-compress
  ******************************************************************************/
 
 #include "lvgl.h"

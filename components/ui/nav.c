@@ -35,10 +35,12 @@ static int s_settings_focus = 0;
 // Action callbacks (registered by app_handlers)
 static nav_action_cb_t s_reset_wifi_cb = NULL;
 static nav_action_cb_t s_sleep_cb = NULL;
+static nav_action_cb_t s_ntp_resync_cb = NULL;
 
 // Settings item indices for action routing
-#define SETTINGS_IDX_SLEEP_NOW  5
-#define SETTINGS_IDX_RESET_WIFI 6
+#define SETTINGS_IDX_SLEEP_NOW  11
+#define SETTINGS_IDX_NTP_RESYNC 13
+#define SETTINGS_IDX_RESET_WIFI 14
 
 // ============================================================
 // Screen switching helpers
@@ -174,6 +176,11 @@ void nav_register_sleep_cb(nav_action_cb_t cb)
   s_sleep_cb = cb;
 }
 
+void nav_register_ntp_resync_cb(nav_action_cb_t cb)
+{
+  s_ntp_resync_cb = cb;
+}
+
 void nav_handle_action(nav_action_t action)
 {
   switch (s_state)
@@ -237,7 +244,19 @@ void nav_handle_action(nav_action_t action)
       s_settings_focus = settings_screen_get_focus();
       if (settings_screen_is_action_item(s_settings_focus))
       {
-        nav_action_cb_t cb = (s_settings_focus == SETTINGS_IDX_SLEEP_NOW) ? s_sleep_cb : s_reset_wifi_cb;
+        nav_action_cb_t cb = NULL;
+        if (s_settings_focus == SETTINGS_IDX_SLEEP_NOW)
+        {
+          cb = s_sleep_cb;
+        }
+        else if (s_settings_focus == SETTINGS_IDX_NTP_RESYNC)
+        {
+          cb = s_ntp_resync_cb;
+        }
+        else if (s_settings_focus == SETTINGS_IDX_RESET_WIFI)
+        {
+          cb = s_reset_wifi_cb;
+        }
         settings_screen_execute_action(s_settings_focus, cb);
       }
       else

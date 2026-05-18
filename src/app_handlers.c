@@ -75,6 +75,11 @@ static void do_sleep_now(void)
   deep_sleep_trigger();
 }
 
+static void do_ntp_resync(void)
+{
+  sntp_sync_force_resync();
+}
+
 // ============================================================
 // Nav callback registration
 // ============================================================
@@ -83,6 +88,7 @@ void app_handlers_register_nav_callbacks(void)
 {
   nav_register_reset_wifi_cb(do_reset_wifi);
   nav_register_sleep_cb(do_sleep_now);
+  nav_register_ntp_resync_cb(do_ntp_resync);
 }
 
 // ============================================================

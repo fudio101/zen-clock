@@ -42,6 +42,12 @@ extern "C"
    */
   void nav_register_sleep_cb(nav_action_cb_t cb);
 
+  /**
+   * @brief Register callback for "NTP Resync" action.
+   * Called by app_handlers to keep ui component decoupled from sntp_sync.
+   */
+  void nav_register_ntp_resync_cb(nav_action_cb_t cb);
+
 #ifdef __cplusplus
 }
 #endif

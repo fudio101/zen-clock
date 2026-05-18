@@ -1,28 +1,34 @@
 // SPDX-License-Identifier: MIT
-// ZenClock — Text-based clock face (DS-Digital 48, fixed-width digit containers)
+// ZenClock — Text-based clock face (DS-Digital 48, per-digit fixed-width containers)
 //
 // Colors follow the global theme (ui_is_light_theme):
 //   light: digit #333333, date #666666, background handled by screen (nav.c)
 //   dark:  digit #01ddff, date #007a99, background handled by screen (nav.c)
 //
-// Fixed-width layout: HH(50) + :(12) + MM(50) + :(12) + SS(50) = 174px total
-// DS-Digital adv_w: digits 391/16 = 24.4px → pair 48.9px → DIGIT_W=50 (1.1px margin)
-//                   colon  170/16 = 10.6px             → COLON_W=12 (1.4px margin)
+// Layout (with seconds):   H1(25)+H2(25)+:(12)+M1(25)+M2(25)+:(12)+S1(25)+S2(25) = 174px
+// Layout (without seconds): H1(25)+H2(25)+:(12)+M1(25)+M2(25) = 112px
+// Each digit is one character, right-aligned in its own 25px container — no jitter on change.
+// DS-Digital adv_w: 391/16 = 24.4px → DIGIT_W=25 (0.6px margin per digit)
+// Colon adv_w: 170/16 = 10.6px → COLON_W=12 (1.4px margin)
+//
+// AM/PM label: DS-Digital 16px, bottom-aligned right of time row (12H mode only).
 
 #include "clock_face.h"
 #include "ui.h"
+#include "settings.h"
 #include "fonts/lv_font_ds_digital_48.h"
+#include "fonts/lv_font_ds_digital_16.h"
 
 #include <time.h>
 #include <sys/time.h>
 
-#define DIGIT_W 50
+#define DIGIT_W 25 // single digit
 #define COLON_W 12
 
-static lv_obj_t *s_hh_label = NULL;
-static lv_obj_t *s_mm_label = NULL;
-static lv_obj_t *s_ss_label = NULL;
+static lv_obj_t *s_time_row = NULL;
+static lv_obj_t *s_digits[6]; // [0]=H1 [1]=H2 [2]=M1 [3]=M2 [4]=S1 [5]=S2
 static lv_obj_t *s_date_label = NULL;
+static lv_obj_t *s_ampm_label = NULL;
 static lv_timer_t *s_clock_timer = NULL;
 
 // ============================================================
@@ -36,23 +42,42 @@ static void clock_timer_cb(lv_timer_t *timer) // NOLINT(readability-non-const-pa
   struct tm timeinfo;
   localtime_r(&now, &timeinfo);
 
-  char buf[12];
+  char buf[2] = {'\0', '\0'};
 
-  (void) strftime(buf, sizeof(buf), "%H", &timeinfo);
-  lv_label_set_text(s_hh_label, buf);
+  const bool is_24h = settings_get_time_format_24h();
+  int h = is_24h ? timeinfo.tm_hour : (timeinfo.tm_hour % 12 != 0 ? timeinfo.tm_hour % 12 : 12);
 
-  (void) strftime(buf, sizeof(buf), "%M", &timeinfo);
-  lv_label_set_text(s_mm_label, buf);
+  buf[0] = (char) ('0' + h / 10);
+  lv_label_set_text(s_digits[0], buf);
+  buf[0] = (char) ('0' + h % 10);
+  lv_label_set_text(s_digits[1], buf);
 
-  (void) strftime(buf, sizeof(buf), "%S", &timeinfo);
-  lv_label_set_text(s_ss_label, buf);
+  buf[0] = (char) ('0' + timeinfo.tm_min / 10);
+  lv_label_set_text(s_digits[2], buf);
+  buf[0] = (char) ('0' + timeinfo.tm_min % 10);
+  lv_label_set_text(s_digits[3], buf);
 
-  (void) strftime(buf, sizeof(buf), "%d/%m/%Y", &timeinfo);
-  lv_label_set_text(s_date_label, buf);
+  if (s_digits[4])
+  {
+    buf[0] = (char) ('0' + timeinfo.tm_sec / 10);
+    lv_label_set_text(s_digits[4], buf);
+    buf[0] = (char) ('0' + timeinfo.tm_sec % 10);
+    lv_label_set_text(s_digits[5], buf);
+  }
+
+  char datebuf[12];
+  (void) strftime(datebuf, sizeof(datebuf), "%d/%m/%Y", &timeinfo);
+  lv_label_set_text(s_date_label, datebuf);
+
+  if (s_ampm_label)
+  {
+    (void) strftime(datebuf, sizeof(datebuf), "%p", &timeinfo);
+    lv_label_set_text(s_ampm_label, datebuf);
+  }
 }
 
 // ============================================================
-// Helper — create one fixed-width digit or colon label
+// Helper — create one fixed-width digit or symbol label
 // ============================================================
 static lv_obj_t *make_segment(lv_obj_t *parent, int32_t w, const char *init, lv_color_t color)
 {
@@ -60,7 +85,7 @@ static lv_obj_t *make_segment(lv_obj_t *parent, int32_t w, const char *init, lv_
   lv_obj_set_width(label, w);
   lv_obj_set_height(label, LV_SIZE_CONTENT);
   lv_obj_set_style_text_font(label, &lv_font_ds_digital_48, 0);
-  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_style_text_color(label, color, 0);
   lv_label_set_text(label, init);
   return label;
@@ -71,25 +96,41 @@ static lv_obj_t *make_segment(lv_obj_t *parent, int32_t w, const char *init, lv_
 // ============================================================
 void clock_face_create(lv_obj_t *parent)
 {
+  const bool show_secs = settings_get_show_seconds();
+  const bool is_24h = settings_get_time_format_24h();
+
   bool light = ui_is_light_theme();
   lv_color_t digit_color = light ? lv_color_hex(0x333333) : lv_color_hex(0x01ddff);
   lv_color_t date_color = light ? lv_color_hex(0x666666) : lv_color_hex(0x007a99);
 
-  // Row container: fixed total width = DIGIT_W*3 + COLON_W*2
-  lv_obj_t *time_row = lv_obj_create(parent);
-  lv_obj_remove_style_all(time_row);
-  lv_obj_set_size(time_row, DIGIT_W * 3 + COLON_W * 2, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(time_row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(time_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_all(time_row, 0, 0);
-  lv_obj_set_style_pad_column(time_row, 0, 0);
-  lv_obj_align(time_row, LV_ALIGN_CENTER, 0, -12);
+  int32_t row_w = show_secs ? (DIGIT_W * 6 + COLON_W * 2) : (DIGIT_W * 4 + COLON_W);
 
-  s_hh_label = make_segment(time_row, DIGIT_W, "00", digit_color);
-  make_segment(time_row, COLON_W, ":", digit_color);
-  s_mm_label = make_segment(time_row, DIGIT_W, "00", digit_color);
-  make_segment(time_row, COLON_W, ":", digit_color);
-  s_ss_label = make_segment(time_row, DIGIT_W, "00", digit_color);
+  s_time_row = lv_obj_create(parent);
+  lv_obj_remove_style_all(s_time_row);
+  lv_obj_set_size(s_time_row, row_w, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(s_time_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(s_time_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_all(s_time_row, 0, 0);
+  lv_obj_set_style_pad_column(s_time_row, 0, 0);
+  lv_obj_align(s_time_row, LV_ALIGN_CENTER, 0, -12);
+
+  s_digits[0] = make_segment(s_time_row, DIGIT_W, "0", digit_color); // H1
+  s_digits[1] = make_segment(s_time_row, DIGIT_W, "0", digit_color); // H2
+  make_segment(s_time_row, COLON_W, ":", digit_color);
+  s_digits[2] = make_segment(s_time_row, DIGIT_W, "0", digit_color); // M1
+  s_digits[3] = make_segment(s_time_row, DIGIT_W, "0", digit_color); // M2
+
+  if (show_secs)
+  {
+    make_segment(s_time_row, COLON_W, ":", digit_color);
+    s_digits[4] = make_segment(s_time_row, DIGIT_W, "0", digit_color); // S1
+    s_digits[5] = make_segment(s_time_row, DIGIT_W, "0", digit_color); // S2
+  }
+  else
+  {
+    s_digits[4] = NULL;
+    s_digits[5] = NULL;
+  }
 
   // Date label below the time row
   s_date_label = lv_label_create(parent);
@@ -97,8 +138,22 @@ void clock_face_create(lv_obj_t *parent)
   lv_obj_set_height(s_date_label, LV_SIZE_CONTENT);
   lv_obj_set_style_text_align(s_date_label, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_color(s_date_label, date_color, 0);
-  lv_obj_align_to(s_date_label, time_row, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
+  lv_obj_align_to(s_date_label, s_time_row, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
   lv_label_set_text(s_date_label, "--/--/----");
+
+  // AM/PM label — only in 12H mode, right of time row on same baseline
+  if (!is_24h)
+  {
+    s_ampm_label = lv_label_create(parent);
+    lv_obj_set_style_text_font(s_ampm_label, &lv_font_ds_digital_16, 0);
+    lv_obj_set_style_text_color(s_ampm_label, date_color, 0);
+    lv_obj_align_to(s_ampm_label, s_time_row, LV_ALIGN_OUT_RIGHT_BOTTOM, 6, 0);
+    lv_label_set_text(s_ampm_label, "");
+  }
+  else
+  {
+    s_ampm_label = NULL;
+  }
 
   s_clock_timer = lv_timer_create(clock_timer_cb, 1000, NULL);
   lv_timer_ready(s_clock_timer);
@@ -111,8 +166,11 @@ void clock_face_destroy(void)
     lv_timer_delete(s_clock_timer);
     s_clock_timer = NULL;
   }
-  s_hh_label = NULL;
-  s_mm_label = NULL;
-  s_ss_label = NULL;
+  s_time_row = NULL;
   s_date_label = NULL;
+  s_ampm_label = NULL;
+  for (int i = 0; i < 6; i++)
+  {
+    s_digits[i] = NULL;
+  }
 }

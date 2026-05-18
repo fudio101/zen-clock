@@ -3,6 +3,9 @@
 #include <esp_log.h>
 #include <nvs_flash.h>
 #include <nvs.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
 
 static const char *const tag = "Settings";
 static const char *nvs_namespace = "zenclock";
@@ -11,6 +14,9 @@ static const char *key_brightness = "brightness";
 static const char *key_sleep_h = "sleep_h";
 static const char *key_sleep_m = "sleep_m";
 static const char *key_sleep_s = "sleep_s";
+static const char *key_time_fmt = "time_fmt";
+static const char *key_show_secs = "show_secs";
+static const char *key_tz_offset = "tz_offset";
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void settings_init(void)
@@ -218,4 +224,67 @@ void settings_set_sleep_m(uint8_t m)
 void settings_set_sleep_s(uint8_t s)
 {
   set_sleep_component(key_sleep_s, s, 59);
+}
+
+bool settings_get_time_format_24h(void)
+{
+  return get_sleep_component(key_time_fmt, 1) != 0;
+}
+
+void settings_set_time_format_24h(bool is_24h)
+{
+  set_sleep_component(key_time_fmt, is_24h ? 1 : 0, 1);
+}
+
+bool settings_get_show_seconds(void)
+{
+  return get_sleep_component(key_show_secs, 1) != 0;
+}
+
+void settings_set_show_seconds(bool show)
+{
+  set_sleep_component(key_show_secs, show ? 1 : 0, 1);
+}
+
+int8_t settings_get_timezone_offset(void)
+{
+  nvs_handle_t h;
+  if (nvs_open(nvs_namespace, NVS_READONLY, &h) != ESP_OK)
+  {
+    return 7;
+  }
+  int8_t val = 7;
+  nvs_get_i8(h, key_tz_offset, &val);
+  nvs_close(h);
+  return val;
+}
+
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void settings_set_timezone_offset(int8_t offset)
+{
+  nvs_handle_t h;
+  esp_err_t err = nvs_open(nvs_namespace, NVS_READWRITE, &h);
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(tag, "Error opening NVS (%s)", esp_err_to_name(err));
+    return;
+  }
+  err = nvs_set_i8(h, key_tz_offset, offset);
+  if (err == ESP_OK)
+  {
+    nvs_commit(h);
+  }
+  else
+  {
+    ESP_LOGE(tag, "Error saving tz_offset (%s)", esp_err_to_name(err));
+  }
+  nvs_close(h);
+}
+
+void settings_apply_timezone(int8_t offset)
+{
+  char tz[12];
+  snprintf(tz, sizeof(tz), "UTC%s%d", offset > 0 ? "-" : "+", abs((int) offset));
+  setenv("TZ", tz, 1);
+  tzset();
 }

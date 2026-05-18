@@ -137,13 +137,16 @@ s → … → 5 min max). NTP syncs immediately once connection is restored.
 
 ```
 Clock → (any long press) → Menu → (SELECT) → Settings
-Settings (7 items, scrollable — 5 visible at a time):
-  Theme, Brightness, Sleep H, Sleep M, Sleep S, Sleep Now, Reset WiFi
+Settings (15 items with 4 section groups, scrollable — 5 visible at a time):
+  — Display —   Theme, Brightness
+  — Clock —     Time Format (24H/12H), Show Seconds, Timezone (UTC offset)
+  — Sleep —     Sleep H, Sleep M, Sleep S, Sleep Now
+  — Network —   NTP Resync, Reset WiFi
 ```
 
 TOGGLE/RANGE items use inline edit: SELECT to enter, UP/DOWN to change value (auto-saved to NVS), SELECT or BACK to
 exit.
-ACTION items (Sleep Now, Reset WiFi): SELECT executes immediately.
+ACTION items (Sleep Now, NTP Resync, Reset WiFi): SELECT executes immediately.
 
 **Auto-sleep:** Configure via Settings → Sleep H / Sleep M / Sleep S. All three at 0 disables auto-sleep.
 

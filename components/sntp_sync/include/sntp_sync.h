@@ -60,6 +60,12 @@ extern "C"
    */
   void sntp_sync_notify_connected(void);
 
+  /**
+   * @brief Force an immediate NTP resync regardless of last sync time.
+   * Use for manual user-triggered resyncs from the Settings screen.
+   */
+  void sntp_sync_force_resync(void);
+
 #ifdef __cplusplus
 }
 #endif

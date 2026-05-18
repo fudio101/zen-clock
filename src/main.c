@@ -1,5 +1,3 @@
-#include <stdlib.h>
-#include <time.h>
 #include <esp_log.h>
 #include "bsp.h"
 #include "deep_sleep.h"
@@ -11,16 +9,13 @@
 
 void app_main(void)
 {
-  // Set timezone to UTC+7 (POSIX convention: "UTC-7" = ahead of UTC)
-  setenv("TZ", "UTC-7", 1);
-  tzset();
-
   // Initialize BSP (LCD + LVGL port, backlight off initially)
   static lv_display_t *disp_handle;
   bsp_display_init(&disp_handle, false);
 
   // Initialize NVS and load settings
   settings_init();
+  settings_apply_timezone(settings_get_timezone_offset());
   const bool is_light = settings_get_theme_light();
   const uint8_t brightness = settings_get_brightness();
 
