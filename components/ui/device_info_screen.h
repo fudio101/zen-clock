@@ -4,6 +4,7 @@
 #pragma once
 
 #include "lvgl.h"
+#include "microlink.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -14,6 +15,9 @@ extern "C"
   void device_info_screen_scroll_up(void);
   void device_info_screen_scroll_down(void);
   void device_info_screen_destroy(void);
+
+  /** Set the MicroLink handle for Tailscale status rows. Call after microlink_init(). NULL = disabled. */
+  void device_info_screen_set_ml(microlink_t *ml);
 
 #ifdef __cplusplus
 }

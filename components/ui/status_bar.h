@@ -11,6 +11,18 @@ extern "C"
 #endif
 
   // ============================================================
+  // Tailscale (MicroLink) status for UI display
+  // ============================================================
+
+  typedef enum
+  {
+    TS_STATUS_IDLE,       // no session / not started
+    TS_STATUS_CONNECTING, // connecting / registering / reconnecting
+    TS_STATUS_CONNECTED,  // tunnel up
+    TS_STATUS_ERROR,      // error
+  } ts_status_t;
+
+  // ============================================================
   // WiFi status for UI display (WiFi layer only)
   // ============================================================
 
@@ -60,6 +72,13 @@ extern "C"
    * Must be called inside lvgl_port_lock()/unlock().
    */
   void status_bar_set_sntp_status(sntp_status_t status);
+
+  /**
+   * @brief Update Tailscale (MicroLink) status indicator.
+   *
+   * Must be called inside lvgl_port_lock()/unlock().
+   */
+  void status_bar_set_ts_status(ts_status_t status);
 
   /**
    * @brief Destroy the status bar and its battery timer.

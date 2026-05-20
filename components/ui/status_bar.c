@@ -16,16 +16,18 @@ static lv_obj_t *s_bat_icon = NULL;
 static lv_obj_t *s_bat_pct = NULL;
 static lv_obj_t *s_wifi_icon = NULL;
 static lv_obj_t *s_sntp_icon = NULL;
+static lv_obj_t *s_ts_icon = NULL;
 static lv_timer_t *s_bat_timer = NULL;
 
 // Persist status across screen switches so icons restore correctly on recreate
 static wifi_status_t s_last_wifi_status = WIFI_STATUS_DISCONNECTED;
 static sntp_status_t s_last_sntp_status = SNTP_STATUS_IDLE;
+static ts_status_t s_last_ts_status = TS_STATUS_IDLE;
 
 // ============================================================
 // Re-align the status bar chain (right-to-left)
 //
-// Layout: [SNTP] [WiFi] [BatIcon] [BatPct]  ← screen edge
+// Layout: [TS] [SNTP] [WiFi] [BatIcon] [BatPct]  ← screen edge
 // ============================================================
 static void realign_chain(void)
 {
@@ -38,10 +40,20 @@ static void realign_chain(void)
     lv_obj_align_to(s_wifi_icon, s_bat_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
   }
 
-  // SNTP icon stays left of WiFi icon
-  if (s_sntp_icon && s_wifi_icon)
+  // SNTP icon stays left of WiFi (only when visible)
+  if (s_sntp_icon && s_wifi_icon && !lv_obj_has_flag(s_sntp_icon, LV_OBJ_FLAG_HIDDEN))
   {
     lv_obj_align_to(s_sntp_icon, s_wifi_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
+  }
+
+  // TS icon: left of SNTP when visible, otherwise left of WiFi
+  if (s_ts_icon)
+  {
+    lv_obj_t *anchor = (s_sntp_icon && !lv_obj_has_flag(s_sntp_icon, LV_OBJ_FLAG_HIDDEN)) ? s_sntp_icon : s_wifi_icon;
+    if (anchor)
+    {
+      lv_obj_align_to(s_ts_icon, anchor, LV_ALIGN_OUT_LEFT_MID, -6, 0);
+    }
   }
 }
 
@@ -137,6 +149,14 @@ void status_bar_create(lv_obj_t *parent)
   lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_40, 0); // Dim initially
   lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
 
+  // --- TS (Tailscale) icon (left of SNTP icon) ---
+  s_ts_icon = lv_label_create(parent);
+  lv_obj_set_width(s_ts_icon, LV_SIZE_CONTENT);
+  lv_obj_set_height(s_ts_icon, LV_SIZE_CONTENT);
+  lv_obj_align_to(s_ts_icon, s_sntp_icon, LV_ALIGN_OUT_LEFT_MID, -6, 0);
+  lv_obj_set_style_text_opa(s_ts_icon, LV_OPA_40, 0); // Dim initially
+  lv_label_set_text(s_ts_icon, LV_SYMBOL_SHUFFLE);
+
   // --- LVGL timer: update battery every 30 seconds ---
   s_bat_timer = lv_timer_create(battery_timer_cb, 30000, NULL);
   lv_timer_ready(s_bat_timer); // Fire immediately on first tick
@@ -144,6 +164,7 @@ void status_bar_create(lv_obj_t *parent)
   // Restore last known status (survives screen transitions)
   status_bar_set_wifi_status(s_last_wifi_status);
   status_bar_set_sntp_status(s_last_sntp_status);
+  status_bar_set_ts_status(s_last_ts_status);
 }
 
 void status_bar_set_wifi_status(wifi_status_t status)
@@ -207,34 +228,58 @@ void status_bar_set_sntp_status(sntp_status_t status)
     return;
   }
 
-  switch (status)
+  if (status == SNTP_STATUS_SYNCING)
   {
-  case SNTP_STATUS_IDLE:
-    lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
-    lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_40, 0);
-    lv_obj_remove_local_style_prop(s_sntp_icon, LV_STYLE_TEXT_COLOR, 0);
-    break;
-
-  case SNTP_STATUS_SYNCING:
+    lv_obj_remove_flag(s_sntp_icon, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_sntp_icon, lv_palette_main(LV_PALETTE_ORANGE), 0);
+  }
+  else
+  {
+    lv_obj_add_flag(s_sntp_icon, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  // Re-align chain — TS anchors to WiFi when SNTP is hidden
+  realign_chain();
+}
+
+void status_bar_set_ts_status(ts_status_t status)
+{
+  s_last_ts_status = status;
+
+  if (!s_ts_icon)
+  {
+    return;
+  }
+
+  switch (status)
+  {
+  case TS_STATUS_IDLE:
+    lv_label_set_text(s_ts_icon, LV_SYMBOL_SHUFFLE);
+    lv_obj_set_style_text_opa(s_ts_icon, LV_OPA_40, 0);
+    lv_obj_remove_local_style_prop(s_ts_icon, LV_STYLE_TEXT_COLOR, 0);
     break;
 
-  case SNTP_STATUS_SYNCED:
-    lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
-    lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_sntp_icon, lv_palette_main(LV_PALETTE_GREEN), 0);
+  case TS_STATUS_CONNECTING:
+    lv_label_set_text(s_ts_icon, LV_SYMBOL_SHUFFLE);
+    lv_obj_set_style_text_opa(s_ts_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_ts_icon, lv_palette_main(LV_PALETTE_ORANGE), 0);
     break;
 
-  case SNTP_STATUS_FAILED:
-    lv_label_set_text(s_sntp_icon, LV_SYMBOL_REFRESH);
-    lv_obj_set_style_text_opa(s_sntp_icon, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_sntp_icon, lv_palette_main(LV_PALETTE_RED), 0);
+  case TS_STATUS_CONNECTED:
+    lv_label_set_text(s_ts_icon, LV_SYMBOL_SHUFFLE);
+    lv_obj_set_style_text_opa(s_ts_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_ts_icon, lv_palette_main(LV_PALETTE_GREEN), 0);
+    break;
+
+  case TS_STATUS_ERROR:
+    lv_label_set_text(s_ts_icon, LV_SYMBOL_SHUFFLE);
+    lv_obj_set_style_text_opa(s_ts_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(s_ts_icon, lv_palette_main(LV_PALETTE_RED), 0);
     break;
   }
 
-  // Re-align entire chain after icon change
   realign_chain();
 }
 
@@ -249,4 +294,5 @@ void status_bar_destroy(void)
   s_bat_pct = NULL;
   s_wifi_icon = NULL;
   s_sntp_icon = NULL;
+  s_ts_icon = NULL;
 }

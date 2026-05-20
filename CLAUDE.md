@@ -85,15 +85,17 @@ widgets.
 | `ui.c`              | Theme init + delegates to `nav_init()`                                               |
 | `nav.c`             | **Navigation state machine** — owns all screen transitions (Clock ↔ Menu ↔ Settings) |
 | `clock_face_text.c` | HH:MM:SS (DS-Digital 48) + DD/MM/YYYY (DS-Digital 16), internal 1s LVGL timer        |
-| `status_bar.c`      | WiFi/NTP/battery icons, internal 30s LVGL timer, reads BSP directly                  |
+| `status_bar.c`      | Tailscale(⇄)/NTP(syncing-only)/WiFi/battery icons; 30s LVGL timer for battery; reads BSP directly |
 | `prov_screen.c`     | QR code overlay shown during BLE provisioning                                        |
 | `menu_screen.c`     | Menu list screen                                                                     |
 | `settings_screen.c` | Scrollable settings list with inline edit — 4 groups, 10 items (+ 4 section headers) |
+| `device_info_screen.c` | System Info screen — 12 read-only rows, scrollable (5 visible), timers 1s/10s/30s |
 
 **Navigation flow:**
 
 ```
-Clock → (any long press) → Menu → (SELECT) → Settings
+Clock → (BOOT long press / SELECT) → Menu → (SELECT) → Settings
+                                            → (SELECT) → System Info
 Settings (10 items across 4 groups, 5 visible at a time, scrollable):
   — Display —   Theme, Brightness
   — Clock —     Time Format (24H/12H), Show Seconds, Timezone
@@ -102,6 +104,11 @@ Settings (10 items across 4 groups, 5 visible at a time, scrollable):
 UP/DOWN navigate, SELECT = enter edit / execute action, BACK = return to Menu
 Edit mode (TOGGLE/RANGE items): UP/DOWN change value (auto-saved to NVS + applied live), SELECT or BACK exits
 Action items (Sleep Now, NTP Resync, Reset WiFi): SELECT executes immediately, no edit mode
+
+System Info (12 rows, 5 visible, scrollable):
+  Chip, Firmware, MAC, Free Heap, Total Heap, Uptime, SSID, IP,
+  Last NTP (HH:MM DD/MM/YY), TS Status, TS IP, Battery
+UP/DOWN scroll, BACK = return to Menu
 ```
 
 **Nav public API** (`nav.h`):
@@ -128,8 +135,8 @@ Clock face is swappable: replace `clock_face_text.c` with another implementation
 
 | Button        | Short press (< 800ms) | Long press (≥ 800ms)                                                      | Emergency hold (≥ 3s) |
 |---------------|----------------------|---------------------------------------------------------------------------|----------------------|
-| BOOT (GPIO0)  | Navigate UP / increase value in edit | SELECT / enter edit mode                          | —                    |
-| IO14 (GPIO14) | Navigate DOWN / decrease value in edit | BACK / exit edit mode                           | Reset WiFi → BLE provisioning (or `esp_restart()` if BLE RAM freed) |
+| BOOT (GPIO0)  | Navigate UP / increase value in edit | SELECT / open Menu from Clock, enter edit mode    | —                    |
+| IO14 (GPIO14) | Navigate DOWN / decrease value in edit | BACK / exit edit mode (no-op on Clock face)     | Reset WiFi → BLE provisioning (or `esp_restart()` if BLE RAM freed) |
 | BOOT + IO14 simultaneously | — | Trigger deep sleep (backlight fades 1.5s → sleep) | — |
 
 Theme and brightness are now adjusted via the Settings screen (Settings → Theme, Settings → Brightness).
@@ -221,6 +228,17 @@ MicroLink connects to Tailscale on every `WIFI_MGR_CONNECTED` event:
 - First connect: `microlink_init()` + `microlink_start()` — full registration, key exchange
 - Reconnect: `microlink_rebind()` — reopens sockets, preserves VPN session and WireGuard keys (~7s recovery)
 - Auth key and device name come from Kconfig (`CONFIG_ML_TAILSCALE_AUTH_KEY`, `CONFIG_ML_DEVICE_NAME`)
+- Skipped entirely if no auth key configured and no stored credentials (`microlink_has_stored_credentials()`)
 
 NVS namespaces used by MicroLink: `"microlink"` (keys), `"ml_peers"` (peer cache).
 To factory-reset Tailscale state: call `microlink_factory_reset()` **before** `microlink_init()`.
+
+**UI integration:**
+- Status bar: `LV_SYMBOL_SHUFFLE` (⇄) icon left of SNTP — dim=idle, orange=connecting, green=connected, red=error
+- System Info rows: `TS Status` (state string) + `TS IP` (VPN IP when connected, else N/A)
+- A 10s `esp_timer` in `app_handlers.c` polls `microlink_get_state()` and calls `status_bar_set_ts_status()`
+- `device_info_screen_set_ml(s_ml)` called after `microlink_start()` and `microlink_rebind()`
+
+**Status bar icon visibility:**
+- NTP (`LV_SYMBOL_REFRESH`): visible only while syncing (orange); hidden at all other times — chain collapses automatically
+- Tailscale (`LV_SYMBOL_SHUFFLE`): always visible, color reflects connection state

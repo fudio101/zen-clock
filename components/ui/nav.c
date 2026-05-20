@@ -187,13 +187,13 @@ void nav_handle_action(nav_action_t action)
   {
   // ========== CLOCK ==========
   case SCR_CLOCK:
-    if (action == NAV_ACTION_SELECT || action == NAV_ACTION_BACK)
+    if (action == NAV_ACTION_SELECT)
     {
       show_menu_screen();
       menu_screen_set_focus(s_menu_focus);
       s_state = SCR_MENU;
     }
-    // Short presses: no-op on clock
+    // Short presses + BACK: no-op on clock
     break;
 
   // ========== MENU ==========

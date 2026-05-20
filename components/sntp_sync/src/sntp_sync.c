@@ -256,6 +256,11 @@ bool sntp_sync_is_synced(void)
   return s_synced;
 }
 
+time_t sntp_sync_get_last_sync_time(void)
+{
+  return s_last_sync_rtc;
+}
+
 void sntp_sync_stop(void)
 {
   // Delete the persistent task first

@@ -15,6 +15,7 @@
 #include "prov_screen.h"
 #include "nav.h"
 #include "microlink.h"
+#include "device_info_screen.h"
 
 static const char *const tag = "ZenClock";
 
@@ -23,6 +24,7 @@ static const char *const tag = "ZenClock";
 // ============================================================
 
 static esp_timer_handle_t s_reconnect_timer = NULL;
+static esp_timer_handle_t s_ts_poll_timer = NULL;
 static int s_reconnect_backoff_s = 30;
 static bool s_sntp_started = false;
 static microlink_t *s_ml = NULL;
@@ -53,6 +55,38 @@ static void cancel_reconnect(void)
     esp_timer_stop(s_reconnect_timer);
   }
   s_reconnect_backoff_s = 30;
+}
+
+// ============================================================
+// Tailscale status poll — fires every 10s to update status bar icon
+// ============================================================
+
+static void ts_poll_cb(void *arg)
+{
+  (void) arg;
+  if (!s_ml)
+  {
+    return;
+  }
+  ts_status_t ts;
+  switch (microlink_get_state(s_ml))
+  {
+  case ML_STATE_CONNECTED:
+    ts = TS_STATUS_CONNECTED;
+    break;
+  case ML_STATE_ERROR:
+    ts = TS_STATUS_ERROR;
+    break;
+  case ML_STATE_IDLE:
+    ts = TS_STATUS_IDLE;
+    break;
+  default:
+    ts = TS_STATUS_CONNECTING;
+    break;
+  }
+  lvgl_port_lock(0);
+  status_bar_set_ts_status(ts);
+  lvgl_port_unlock();
 }
 
 // ============================================================
@@ -282,6 +316,13 @@ void on_wifi_event(const wifi_manager_event_t event)
       if (s_ml)
       {
         microlink_start(s_ml);
+        device_info_screen_set_ml(s_ml);
+        if (!s_ts_poll_timer)
+        {
+          const esp_timer_create_args_t ts_args = {.callback = ts_poll_cb, .name = "ts_poll"};
+          esp_timer_create(&ts_args, &s_ts_poll_timer);
+        }
+        esp_timer_start_periodic(s_ts_poll_timer, 10ULL * 1000000ULL);
       }
       else
       {
@@ -291,6 +332,7 @@ void on_wifi_event(const wifi_manager_event_t event)
     else
     {
       microlink_rebind(s_ml);
+      device_info_screen_set_ml(s_ml);
     }
     break;
 

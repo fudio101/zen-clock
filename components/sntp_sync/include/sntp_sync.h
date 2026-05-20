@@ -9,6 +9,7 @@ extern "C"
 #endif
 
 #include "esp_err.h"
+#include <time.h>
 
 // Default NTP server (Vietnam)
 // Alternatives: "2.ntp.vnix.vn", "vn.pool.ntp.org", "pool.ntp.org", "time.google.com"
@@ -65,6 +66,12 @@ extern "C"
    * Use for manual user-triggered resyncs from the Settings screen.
    */
   void sntp_sync_force_resync(void);
+
+  /**
+   * @brief Return timestamp of last successful NTP sync.
+   * Returns 0 if never synced. Persists across deep sleep (RTC memory).
+   */
+  time_t sntp_sync_get_last_sync_time(void);
 
 #ifdef __cplusplus
 }

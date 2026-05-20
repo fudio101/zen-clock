@@ -9,13 +9,15 @@
 // Refresh schedule:
 //   Static (once on create): Chip, Total Heap, Firmware, MAC
 //   Every 1s:  Uptime
-//   Every 10s: Free Heap, SSID, IP
+//   Every 10s: Free Heap, SSID, IP, Last NTP, TS Status, TS IP
 //   Every 30s: Battery
 
 #include "device_info_screen.h"
 #include "ui_utils.h"
 #include "bsp.h"
 #include "wifi_manager.h"
+#include "microlink.h"
+#include "sntp_sync.h"
 
 #include <esp_chip_info.h>
 #include <esp_mac.h>
@@ -23,6 +25,7 @@
 #include <esp_timer.h>
 #include <esp_system.h>
 #include <stdio.h>
+#include <time.h>
 
 #define APP_VERSION "1.0.0"
 
@@ -38,7 +41,7 @@
 // ============================================================
 // Row indices
 // ============================================================
-#define ROW_COUNT   9
+#define ROW_COUNT   12
 #define ROW_VISIBLE 5
 
 #define ROW_CHIP       0
@@ -49,10 +52,14 @@
 #define ROW_UPTIME     5
 #define ROW_SSID       6
 #define ROW_IP         7
-#define ROW_BATTERY    8
+#define ROW_NTP_SYNC   8
+#define ROW_TS_STATUS  9
+#define ROW_TS_IP      10
+#define ROW_BATTERY    11
 
 static const char *const s_row_labels[ROW_COUNT] = {
-    "Chip", "Firmware", "MAC", "Free Heap", "Total Heap", "Uptime", "SSID", "IP", "Battery",
+    "Chip", "Firmware", "MAC",      "Free Heap", "Total Heap", "Uptime",
+    "SSID", "IP",       "Last NTP", "TS Status", "TS IP",      "Battery",
 };
 
 // ============================================================
@@ -61,6 +68,7 @@ static const char *const s_row_labels[ROW_COUNT] = {
 static int s_scroll = 0;
 static lv_obj_t *s_name_labels[ROW_COUNT] = {NULL};
 static lv_obj_t *s_value_labels[ROW_COUNT] = {NULL};
+static microlink_t *s_ml_handle = NULL;
 
 static lv_timer_t *s_timer_1s = NULL;
 static lv_timer_t *s_timer_10s = NULL;
@@ -141,6 +149,84 @@ static void update_network(void)
   }
 }
 
+static void update_ntp_sync(void)
+{
+  if (!s_value_labels[ROW_NTP_SYNC])
+  {
+    return;
+  }
+  const time_t t = sntp_sync_get_last_sync_time();
+  if (t == 0)
+  {
+    lv_label_set_text(s_value_labels[ROW_NTP_SYNC], "Never");
+    return;
+  }
+  struct tm tm_info;
+  localtime_r(&t, &tm_info);
+  char buf[20];
+  strftime(buf, sizeof(buf), "%H:%M %d/%m/%y", &tm_info);
+  lv_label_set_text(s_value_labels[ROW_NTP_SYNC], buf);
+}
+
+static const char *ts_state_str(const microlink_state_t state)
+{
+  switch (state)
+  {
+  case ML_STATE_IDLE:
+    return "Idle";
+  case ML_STATE_WIFI_WAIT:
+    return "Waiting";
+  case ML_STATE_CONNECTING:
+    return "Connecting";
+  case ML_STATE_REGISTERING:
+    return "Registering";
+  case ML_STATE_CONNECTED:
+    return "Connected";
+  case ML_STATE_RECONNECTING:
+    return "Reconnecting";
+  case ML_STATE_ERROR:
+    return "Error";
+  default:
+    return "Unknown";
+  }
+}
+
+static void update_tailscale(void)
+{
+  if (!s_ml_handle)
+  {
+    if (s_value_labels[ROW_TS_STATUS])
+    {
+      lv_label_set_text(s_value_labels[ROW_TS_STATUS], "N/A");
+    }
+    if (s_value_labels[ROW_TS_IP])
+    {
+      lv_label_set_text(s_value_labels[ROW_TS_IP], "N/A");
+    }
+    return;
+  }
+
+  const microlink_state_t state = microlink_get_state(s_ml_handle);
+
+  if (s_value_labels[ROW_TS_STATUS])
+  {
+    lv_label_set_text(s_value_labels[ROW_TS_STATUS], ts_state_str(state));
+  }
+  if (s_value_labels[ROW_TS_IP])
+  {
+    if (state == ML_STATE_CONNECTED)
+    {
+      char ip[16];
+      microlink_ip_to_str(microlink_get_vpn_ip(s_ml_handle), ip);
+      lv_label_set_text(s_value_labels[ROW_TS_IP], ip);
+    }
+    else
+    {
+      lv_label_set_text(s_value_labels[ROW_TS_IP], "N/A");
+    }
+  }
+}
+
 static void update_battery(void)
 {
   if (!s_value_labels[ROW_BATTERY])
@@ -165,6 +251,8 @@ static void timer_10s_cb(lv_timer_t *t) // NOLINT(readability-non-const-paramete
 {
   (void) t;
   update_network();
+  update_ntp_sync();
+  update_tailscale();
 }
 
 static void timer_30s_cb(lv_timer_t *t) // NOLINT(readability-non-const-parameter)
@@ -262,6 +350,8 @@ void device_info_screen_create(lv_obj_t *parent)
   // Initial dynamic values
   update_uptime();
   update_network();
+  update_ntp_sync();
+  update_tailscale();
   update_battery();
 
   apply_scroll();
@@ -269,6 +359,12 @@ void device_info_screen_create(lv_obj_t *parent)
   s_timer_1s = lv_timer_create(timer_1s_cb, 1000, NULL);
   s_timer_10s = lv_timer_create(timer_10s_cb, 10000, NULL);
   s_timer_30s = lv_timer_create(timer_30s_cb, 30000, NULL);
+}
+
+void device_info_screen_set_ml(microlink_t *ml)
+{
+  s_ml_handle = ml;
+  update_tailscale();
 }
 
 void device_info_screen_scroll_up(void)

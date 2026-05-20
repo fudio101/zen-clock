@@ -17,15 +17,15 @@ A beautiful clock project running on the **LilyGo T-Display-S3** board.
 
 ## Software Stack
 
-| Layer            | Technology                                                                                 |
-|------------------|--------------------------------------------------------------------------------------------|
-| **Framework**    | ESP-IDF v6.0.0 (via PlatformIO)                                                            |
-| **Graphics**     | LVGL 9.5.0                                                                                 |
-| **LVGL Port**    | [esp_lvgl_port](https://github.com/espressif/esp-bsp/tree/master/components/esp_lvgl_port) |
-| **UI**           | Hand-written LVGL code (no external UI designer)                                           |
-| **Provisioning** | espressif/network_provisioning ^1.2.4 (BLE)                                                |
-| **VPN**          | [MicroLink](https://github.com/fudio101/microlink) — Tailscale client for ESP32 (WireGuard)|
-| **Build System** | PlatformIO + ESP-IDF Component Manager                                                     |
+| Layer            | Technology                                                                                  |
+|------------------|---------------------------------------------------------------------------------------------|
+| **Framework**    | ESP-IDF v6.0.0 (via PlatformIO)                                                             |
+| **Graphics**     | LVGL 9.5.0                                                                                  |
+| **LVGL Port**    | [esp_lvgl_port](https://github.com/espressif/esp-bsp/tree/master/components/esp_lvgl_port)  |
+| **UI**           | Hand-written LVGL code (no external UI designer)                                            |
+| **Provisioning** | espressif/network_provisioning ^1.2.4 (BLE)                                                 |
+| **VPN**          | [MicroLink](https://github.com/fudio101/microlink) — Tailscale client for ESP32 (WireGuard) |
+| **Build System** | PlatformIO + ESP-IDF Component Manager                                                      |
 
 ## Project Structure
 
@@ -55,6 +55,7 @@ ZenClock/
 │   │   ├── nav.c/.h           # Screen navigation state machine
 │   │   ├── menu_screen.c/.h   # Main menu screen
 │   │   ├── settings_screen.c/.h # Settings screen with inline edit
+│   │   ├── device_info_screen.c/.h # System Info screen (12 rows, scrollable)
 │   │   ├── clock_face_text.c  # Text-based clock face rendering
 │   │   └── prov_screen.c/.h   # QR code overlay for BLE provisioning
 │   ├── wifi_manager/          # WiFi connection + BLE provisioning fallback
@@ -146,10 +147,10 @@ s → … → 5 min max). NTP syncs immediately once connection is restored.
 
 - **BOOT button (GPIO0)**
     - Short press: Navigate UP (or increase value in edit mode)
-    - Long press: SELECT / Enter (open menu, enter edit mode, or confirm)
+    - Long press: SELECT / Enter (open menu from Clock, enter edit mode, or confirm)
 - **Side button (GPIO14)**
     - Short press: Navigate DOWN (or decrease value in edit mode)
-    - Long press: BACK / Exit (go back or exit edit mode)
+    - Long press: BACK / Exit (go back or exit edit mode; **no-op on Clock face**)
     - Hold 3 seconds (EMERGENCY): Clear WiFi credentials → BLE provisioning
 - **BOOT + IO14 simultaneously (≥ 800ms):** Trigger deep sleep — backlight fades over 1.5s, device enters deep sleep (~
   6µA). Press either button to wake.
@@ -157,12 +158,17 @@ s → … → 5 min max). NTP syncs immediately once connection is restored.
 **Navigation Flow:**
 
 ```
-Clock → (any long press) → Menu → (SELECT) → Settings
+Clock → (BOOT long press) → Menu → (SELECT) → Settings
+                                 → (SELECT) → System Info
 Settings (15 items with 4 section groups, scrollable — 5 visible at a time):
   — Display —   Theme, Brightness
   — Clock —     Time Format (24H/12H), Show Seconds, Timezone (UTC offset)
   — Sleep —     Sleep H, Sleep M, Sleep S, Sleep Now
   — Network —   NTP Resync, Reset WiFi
+
+System Info (12 rows, 5 visible, scrollable):
+  Chip, Firmware, MAC, Free Heap, Total Heap, Uptime,
+  SSID, IP, Last NTP, TS Status, TS IP, Battery
 ```
 
 TOGGLE/RANGE items use inline edit: SELECT to enter, UP/DOWN to change value (auto-saved to NVS), SELECT or BACK to

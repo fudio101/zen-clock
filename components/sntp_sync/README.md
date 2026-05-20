@@ -26,6 +26,13 @@ bool sntp_sync_is_synced(void);
 
 // Stop SNTP client and free resources.
 void sntp_sync_stop(void);
+
+// Force immediate NTP resync regardless of last sync time (manual user trigger).
+void sntp_sync_force_resync(void);
+
+// Return timestamp (time_t) of last successful NTP sync.
+// Returns 0 if never synced. Persists across deep sleep via RTC_DATA_ATTR.
+time_t sntp_sync_get_last_sync_time(void);
 ```
 
 ### Events

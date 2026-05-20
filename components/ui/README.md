@@ -12,11 +12,12 @@ app_handlers.c
       │
       ▼
    nav.c              ← navigation state machine
-   ├── clock screen   → clock_face_text.c + status_bar.c
-   ├── menu screen    → menu_screen.c + status_bar.c
-   └── settings screen→ settings_screen.c + status_bar.c
-                              ↕ (overlay)
-                         prov_screen.c
+   ├── clock screen       → clock_face_text.c + status_bar.c
+   ├── menu screen        → menu_screen.c + status_bar.c
+   ├── settings screen    → settings_screen.c + status_bar.c
+   └── system info screen → device_info_screen.c + status_bar.c
+                                  ↕ (overlay)
+                             prov_screen.c
 ```
 
 Nav owns all screen creation and teardown. Nothing outside `nav.c` calls `clock_face_create`, `status_bar_create`, or
@@ -33,6 +34,7 @@ ui/
 ├── prov_screen.h / prov_screen.c         ← BLE provisioning overlay
 ├── menu_screen.h / menu_screen.c         ← Menu screen
 ├── settings_screen.h / settings_screen.c ← Settings screen with inline edit
+├── device_info_screen.h / device_info_screen.c ← System Info (12 rows, scrollable)
 ├── fonts/
 │   ├── DS-DIGIT.TTF                      ← DS-Digital source font (7-segment style)
 │   ├── DS-DIGI.TTF / DS-DIGIB.TTF / DS-DIGII.TTF ← other weights (unused)
@@ -153,8 +155,11 @@ void clock_face_destroy(void);            // stop timer before deleting parent
 void status_bar_create(lv_obj_t *parent);
 void status_bar_destroy(void);
 void status_bar_set_wifi_status(wifi_status_t status); // includes WIFI_STATUS_PROVISIONING
-void status_bar_set_sntp_status(sntp_status_t status);
+void status_bar_set_sntp_status(sntp_status_t status); // visible only when SYNCING, hidden otherwise
+void status_bar_set_ts_status(ts_status_t status);     // Tailscale: idle/connecting/connected/error
 ```
+
+Icon chain (right-to-left): `[TS ⇄] [NTP ↻ — syncing only] [WiFi] [BatIcon] [BatPct]`
 
 Internal 30-second LVGL timer refreshes battery level automatically.
 
@@ -174,6 +179,22 @@ void menu_screen_focus_next(void);   // stops at last item
 int  menu_screen_get_focus(void);
 void menu_screen_set_focus(int index);
 ```
+
+### `device_info_screen.h` — System Info screen
+
+```c
+void device_info_screen_create(lv_obj_t *parent);
+void device_info_screen_destroy(void);
+void device_info_screen_scroll_up(void);
+void device_info_screen_scroll_down(void);
+void device_info_screen_set_ml(microlink_t *ml); // pass s_ml after microlink_start(); NULL = disabled
+```
+
+12 read-only rows (5 visible, UP/DOWN to scroll):
+`Chip`, `Firmware`, `MAC`, `Free Heap`, `Total Heap`, `Uptime`, `SSID`, `IP`, `Last NTP`, `TS Status`, `TS IP`,
+`Battery`
+
+Refresh: static on create (Chip/Firmware/MAC/Total Heap) · 1s (Uptime) · 10s (Heap/SSID/IP/Last NTP/TS) · 30s (Battery)
 
 ### `settings_screen.h`
 
@@ -195,9 +216,9 @@ void settings_screen_edit_decrease(void);
 
 ```
 Clock screen
-  └─ any long press ──────────────────────→ Menu screen
+  └─ BOOT long press (SELECT) ────────────→ Menu screen
                                                ├─ UP/DOWN: navigate items
-                                               ├─ SELECT:  enter Settings
+                                               ├─ SELECT:  enter Settings or System Info
                                                └─ BACK:    → Clock screen
 
 Settings screen (15 items with 4 section headers, scrollable — 5 visible at a time)
@@ -212,6 +233,11 @@ Settings edit mode (TOGGLE/RANGE items only)
   └─ BACK:    exit edit mode
 
 Action items (Sleep Now, Reset WiFi): SELECT fires callback, no edit mode
+
+System Info screen (12 rows, 5 visible at a time)
+  Rows: Chip, Firmware, MAC, Free Heap, Total Heap, Uptime, SSID, IP, Last NTP, TS Status, TS IP, Battery
+  ├─ UP/DOWN: scroll
+  └─ BACK:    → Menu screen
 ```
 
 ## Key Constraints
