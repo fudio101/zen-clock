@@ -14,6 +14,7 @@
 #include "ble_provisioning.h"
 #include "prov_screen.h"
 #include "nav.h"
+#include "microlink.h"
 
 static const char *const tag = "ZenClock";
 
@@ -24,6 +25,7 @@ static const char *const tag = "ZenClock";
 static esp_timer_handle_t s_reconnect_timer = NULL;
 static int s_reconnect_backoff_s = 30;
 static bool s_sntp_started = false;
+static microlink_t *s_ml = NULL;
 
 // NOLINTNEXTLINE(readability-non-const-parameter)
 static void reconnect_timer_cb(void *arg)
@@ -259,6 +261,36 @@ void on_wifi_event(const wifi_manager_event_t event)
     {
       ESP_LOGI(tag, "WiFi reconnected — notifying SNTP");
       sntp_sync_notify_connected();
+    }
+    if (CONFIG_ML_TAILSCALE_AUTH_KEY[0] == '\0' && !microlink_has_stored_credentials())
+    {
+      ESP_LOGI(tag, "No Tailscale auth key and no stored session — skipping MicroLink");
+    }
+    else if (s_ml == NULL)
+    {
+      const char *dev_name =
+          (CONFIG_ML_DEVICE_NAME[0] != '\0') ? CONFIG_ML_DEVICE_NAME : microlink_default_device_name();
+      microlink_config_t ml_cfg = {
+          .auth_key = CONFIG_ML_TAILSCALE_AUTH_KEY,
+          .device_name = dev_name,
+          .enable_derp = true,
+          .enable_stun = true,
+          .enable_disco = true,
+          .max_peers = CONFIG_ML_MAX_PEERS,
+      };
+      s_ml = microlink_init(&ml_cfg);
+      if (s_ml)
+      {
+        microlink_start(s_ml);
+      }
+      else
+      {
+        ESP_LOGE(tag, "microlink_init failed");
+      }
+    }
+    else
+    {
+      microlink_rebind(s_ml);
     }
     break;
 

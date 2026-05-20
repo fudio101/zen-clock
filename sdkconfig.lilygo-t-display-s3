@@ -2666,8 +2666,7 @@ CONFIG_ESP_SYSTEM_MEMPROT_PMS_LOCK=y
 CONFIG_ESP_SYSTEM_EVENT_QUEUE_SIZE=32
 # default:
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=2304
-# default:
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=3584
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # default:
 CONFIG_ESP_MAIN_TASK_AFFINITY_CPU0=y
 # default:
@@ -3300,8 +3299,7 @@ CONFIG_LWIP_IP_DEFAULT_TTL=64
 CONFIG_LWIP_IP4_FRAG=y
 # default:
 CONFIG_LWIP_IP6_FRAG=y
-# default:
-# CONFIG_LWIP_IP4_REASSEMBLY is not set
+CONFIG_LWIP_IP4_REASSEMBLY=y
 # default:
 # CONFIG_LWIP_IP6_REASSEMBLY is not set
 # default:
@@ -3678,11 +3676,8 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 #
 # Certificate Bundle Configuration
 #
-# default:
-CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
-# default:
-# CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN is not set
-# default:
+# CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL is not set
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
 # CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_NONE is not set
 # default:
 # CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE is not set
@@ -3949,7 +3944,8 @@ CONFIG_MBEDTLS_PKCS1_V21=y
 # Stream Cipher
 #
 # default:
-# CONFIG_MBEDTLS_CHACHA20_C is not set
+# CONFIG_MBEDTLS_CHACHAPOLY_C is not set
+CONFIG_MBEDTLS_CHACHA20_C=y
 # end of Stream Cipher
 # end of mbedTLS
 
@@ -4294,6 +4290,62 @@ CONFIG_WL_SECTOR_SIZE_4096=y
 # default:
 CONFIG_WL_SECTOR_SIZE=4096
 # end of Wear Levelling
+
+#
+# MicroLink V2 Configuration
+#
+# default:
+# CONFIG_ML_ZERO_COPY_WG is not set
+# default:
+CONFIG_ML_MAX_PEERS=16
+# default:
+CONFIG_ML_PRIORITY_PEER_IP=""
+# default:
+CONFIG_ML_NVS_MAX_PEERS=64
+# default:
+CONFIG_ML_H2_BUFFER_SIZE_KB=512
+# default:
+CONFIG_ML_JSON_BUFFER_SIZE_KB=512
+
+#
+# Cellular Modem
+#
+# default:
+# CONFIG_ML_ENABLE_CELLULAR is not set
+# end of Cellular Modem
+
+#
+# Network Switching
+#
+# end of Network Switching
+
+#
+# Credentials
+#
+
+#
+# Configure via: idf.py menuconfig → MicroLink V2 → Credentials
+#
+
+#
+# These values are stored in sdkconfig (git-ignored).
+#
+# default:
+CONFIG_ML_WIFI_SSID=""
+# default:
+CONFIG_ML_WIFI_PASSWORD=""
+# default:
+CONFIG_ML_TAILSCALE_AUTH_KEY=""
+CONFIG_ML_DEVICE_NAME="zen-clock"
+# end of Credentials
+
+#
+# HTTP Config Server
+#
+# default:
+# CONFIG_ML_ENABLE_CONFIG_HTTPD is not set
+# end of HTTP Config Server
+# end of MicroLink V2 Configuration
 
 #
 # cJSON
@@ -5316,7 +5368,7 @@ CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=y
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE_LOCK=y
 CONFIG_SYSTEM_EVENT_QUEUE_SIZE=32
 CONFIG_SYSTEM_EVENT_TASK_STACK_SIZE=2304
-CONFIG_MAIN_TASK_STACK_SIZE=3584
+CONFIG_MAIN_TASK_STACK_SIZE=8192
 CONFIG_INT_WDT=y
 CONFIG_INT_WDT_TIMEOUT_MS=300
 CONFIG_INT_WDT_CHECK_CPU1=y

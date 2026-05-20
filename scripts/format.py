@@ -59,7 +59,10 @@ def get_source_files(root_dir, targets=None):
             for ext in ["*.c", "*.h", "*.cpp", "*.hpp"]:
                 for file_path in target_path.rglob(ext):
                     # Skip managed components and build directories
-                    if "managed_components" in str(file_path) or ".pio" in str(file_path) or "build" in str(file_path):
+                    path_str = str(file_path)
+                    if any(ignored in path_str for ignored in
+                           ["managed_components", ".pio", "build", "vendor", "components/microlink",
+                            "components/wireguard_lwip"]):
                         continue
                     files_to_format.append(str(file_path.absolute()))
 

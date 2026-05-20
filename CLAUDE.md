@@ -51,10 +51,10 @@ All event callbacks and nav wiring live here:
 | Symbol                                  | Role                                                                                 |
 |-----------------------------------------|--------------------------------------------------------------------------------------|
 | `on_button_press`                       | Maps BSP button events → `nav_handle_action()`; handles emergency IO14 hold directly |
-| `on_wifi_event`                         | WiFi manager state machine transitions                                               |
+| `on_wifi_event`                         | WiFi manager state machine transitions; calls `microlink_init/start` on first CONNECTED, `microlink_rebind` on reconnect |
 | `on_ble_prov_event`                     | BLE provisioning lifecycle events                                                    |
 | `on_sntp_sync`                          | NTP sync status updates                                                              |
-| `app_handlers_register_nav_callbacks()` | Wires `do_reset_wifi` and `do_sleep_now` into nav system — called once at boot |
+| `app_handlers_register_nav_callbacks()` | Wires `do_reset_wifi`, `do_sleep_now`, and `do_ntp_resync` into nav system — called once at boot |
 
 `on_wifi_event` falls back to `ble_provisioning_start()` on `NO_CRED`, `NO_MATCH`, `ALL_FAILED`, and `DISCONNECTED`.
 
@@ -70,6 +70,8 @@ All event callbacks and nav wiring live here:
 | `components/sntp_sync/`        | NTP time synchronization; skips initial sync on deep-sleep wake if recently synced |
 | `components/deep_sleep/`       | Auto-sleep timer (inactivity) + manual trigger + ext1 wakeup on GPIO0/GPIO14     |
 | `components/lcd_backlight/`    | LCD backlight driver via LEDC PWM                                                |
+| `components/microlink/`        | Tailscale VPN client — symlink → `vendor/microlink/components/microlink`         |
+| `components/wireguard_lwip/`   | WireGuard lwIP netif — symlink → `vendor/microlink/.../wireguard_lwip`           |
 
 ### UI Component (`components/ui/`)
 
@@ -82,28 +84,34 @@ widgets.
 |---------------------|--------------------------------------------------------------------------------------|
 | `ui.c`              | Theme init + delegates to `nav_init()`                                               |
 | `nav.c`             | **Navigation state machine** — owns all screen transitions (Clock ↔ Menu ↔ Settings) |
-| `clock_face_text.c` | HH:MM:SS (Montserrat 48) + DD/MM/YYYY (Montserrat 14), internal 1s LVGL timer        |
+| `clock_face_text.c` | HH:MM:SS (DS-Digital 48) + DD/MM/YYYY (DS-Digital 16), internal 1s LVGL timer        |
 | `status_bar.c`      | WiFi/NTP/battery icons, internal 30s LVGL timer, reads BSP directly                  |
 | `prov_screen.c`     | QR code overlay shown during BLE provisioning                                        |
 | `menu_screen.c`     | Menu list screen                                                                     |
-| `settings_screen.c` | Scrollable settings list with inline edit (Theme, Brightness, Sleep H/M/S, Sleep Now, Reset WiFi) |
+| `settings_screen.c` | Scrollable settings list with inline edit — 4 groups, 10 items (+ 4 section headers) |
 
 **Navigation flow:**
 
 ```
 Clock → (any long press) → Menu → (SELECT) → Settings
-Settings (7 items, 5 visible, scrollable): UP/DOWN navigate, SELECT = enter edit / execute action, BACK = return to Menu
+Settings (10 items across 4 groups, 5 visible at a time, scrollable):
+  — Display —   Theme, Brightness
+  — Clock —     Time Format (24H/12H), Show Seconds, Timezone
+  — Sleep —     Sleep H, Sleep M, Sleep S, Sleep Now
+  — Network —   NTP Resync, Reset WiFi
+UP/DOWN navigate, SELECT = enter edit / execute action, BACK = return to Menu
 Edit mode (TOGGLE/RANGE items): UP/DOWN change value (auto-saved to NVS + applied live), SELECT or BACK exits
-Action items (Sleep Now, Reset WiFi): SELECT executes immediately, no edit mode
+Action items (Sleep Now, NTP Resync, Reset WiFi): SELECT executes immediately, no edit mode
 ```
 
 **Nav public API** (`nav.h`):
 
 ```c
-void nav_init(void);                                  // creates + loads clock screen
-void nav_handle_action(nav_action_t action);          // called by on_button_press
-void nav_register_reset_wifi_cb(nav_action_cb_t cb);  // wired by app_handlers_register_nav_callbacks
-void nav_register_sleep_cb(nav_action_cb_t cb);       // wired by app_handlers_register_nav_callbacks
+void nav_init(void);                                    // creates + loads clock screen
+void nav_handle_action(nav_action_t action);            // called by on_button_press
+void nav_register_reset_wifi_cb(nav_action_cb_t cb);   // wired by app_handlers_register_nav_callbacks
+void nav_register_sleep_cb(nav_action_cb_t cb);        // wired by app_handlers_register_nav_callbacks
+void nav_register_ntp_resync_cb(nav_action_cb_t cb);   // wired by app_handlers_register_nav_callbacks
 ```
 
 **Nav actions** map to buttons:
@@ -200,3 +208,19 @@ Managed components (in `managed_components/`):
 - `lvgl__lvgl` — LVGL graphics library
 
 Declared in `src/idf_component.yml`.
+
+Vendor submodule (in `vendor/`):
+
+- `vendor/microlink` — MicroLink Tailscale client (branch: `esp-idf-6x-compat`)
+  - Symlinked into `components/microlink/` and `components/wireguard_lwip/`
+  - Clone the repo with `--recursive` or run `git submodule update --init` after clone
+
+## Tailscale / MicroLink
+
+MicroLink connects to Tailscale on every `WIFI_MGR_CONNECTED` event:
+- First connect: `microlink_init()` + `microlink_start()` — full registration, key exchange
+- Reconnect: `microlink_rebind()` — reopens sockets, preserves VPN session and WireGuard keys (~7s recovery)
+- Auth key and device name come from Kconfig (`CONFIG_ML_TAILSCALE_AUTH_KEY`, `CONFIG_ML_DEVICE_NAME`)
+
+NVS namespaces used by MicroLink: `"microlink"` (keys), `"ml_peers"` (peer cache).
+To factory-reset Tailscale state: call `microlink_factory_reset()` **before** `microlink_init()`.

@@ -24,6 +24,7 @@ A beautiful clock project running on the **LilyGo T-Display-S3** board.
 | **LVGL Port**    | [esp_lvgl_port](https://github.com/espressif/esp-bsp/tree/master/components/esp_lvgl_port) |
 | **UI**           | Hand-written LVGL code (no external UI designer)                                           |
 | **Provisioning** | espressif/network_provisioning ^1.2.4 (BLE)                                                |
+| **VPN**          | [MicroLink](https://github.com/fudio101/microlink) — Tailscale client for ESP32 (WireGuard)|
 | **Build System** | PlatformIO + ESP-IDF Component Manager                                                     |
 
 ## Project Structure
@@ -58,16 +59,22 @@ ZenClock/
 │   │   └── prov_screen.c/.h   # QR code overlay for BLE provisioning
 │   ├── wifi_manager/          # WiFi connection + BLE provisioning fallback
 │   │   └── README.md          # 📖 WiFi manager API & architecture
-│   └── ble_provisioning/      # BLE provisioning (espressif/network_provisioning)
-│       ├── include/ble_provisioning.h
-│       ├── src/ble_provisioning.c
-│       ├── CMakeLists.txt
-│       └── idf_component.yml
+│   ├── ble_provisioning/      # BLE provisioning (espressif/network_provisioning)
+│   │   ├── include/ble_provisioning.h
+│   │   ├── src/ble_provisioning.c
+│   │   ├── CMakeLists.txt
+│   │   └── idf_component.yml
+│   ├── microlink -> ../vendor/microlink/components/microlink
+│   │                          # Tailscale VPN client (symlink → submodule)
+│   └── wireguard_lwip -> ../vendor/microlink/components/microlink/components/wireguard_lwip
+│                          # WireGuard lwIP integration (symlink → submodule)
+├── vendor/
+│   └── microlink/             # git submodule (branch: esp-idf-6x-compat)
 ├── include/
 │   └── board_config.h         # Pin definitions and board constants (single source)
 ├── src/
 │   ├── main.c                 # Application entry point
-│   ├── app_handlers.c/.h      # Event callbacks (button, WiFi, BLE, SNTP)
+│   ├── app_handlers.c/.h      # Event callbacks (button, WiFi, BLE, SNTP, MicroLink)
 │   ├── CMakeLists.txt         # Main component build config
 │   └── idf_component.yml      # LVGL + esp_lvgl_port dependencies
 ├── platformio.ini
@@ -88,6 +95,20 @@ ZenClock/
 
 1. [PlatformIO](https://platformio.org/) installed (VS Code extension recommended)
 2. LilyGo T-Display-S3 connected via USB
+
+### Clone
+
+```bash
+git clone --recursive https://github.com/fudio101/zen-clock.git
+```
+
+> `--recursive` is required to initialize the `vendor/microlink` submodule.
+> Without it, `components/microlink` and `components/wireguard_lwip` symlinks will be dangling and the build will fail.
+>
+> If you already cloned without `--recursive`:
+> ```bash
+> git submodule update --init
+> ```
 
 ### Build & Flash
 
@@ -177,6 +198,31 @@ Ensure the following settings are configured:
 
 > ⚠️ **Never set PSRAM to Quad mode** — this will cause a boot loop on the T-Display-S3.
 
+### Tailscale Credentials
+
+Tailscale auth key and device name are set via menuconfig (or `sdkconfig.credentials`, which is git-ignored):
+
+```bash
+pio run -t menuconfig
+# → MicroLink V2 Configuration → Credentials
+#   ML_TAILSCALE_AUTH_KEY  = tskey-auth-xxxxxxxxxxxx
+#   ML_DEVICE_NAME         = zen-clock   (or leave empty for MAC-based default)
+```
+
+Alternatively, create `sdkconfig.credentials` (git-ignored) and reference it in `platformio.ini`:
+
+```ini
+board_build.esp-idf.sdkconfig_extra = sdkconfig.credentials
+```
+
+```
+# sdkconfig.credentials
+CONFIG_ML_TAILSCALE_AUTH_KEY="tskey-auth-xxxxxxxxxxxx"
+CONFIG_ML_DEVICE_NAME="zen-clock"
+```
+
+> Use **reusable** auth keys for development — single-use keys expire after the first registration.
+
 ---
 
 ## Known Gotchas & Troubleshooting
@@ -205,6 +251,7 @@ rendering. Place all widgets directly on the screen object. See [
 - Backlight driver adapted from [hiruna/esp-idf-aw9364](https://github.com/hiruna/esp-idf-aw9364)
 - [LVGL](https://lvgl.io/) — Light and Versatile Graphics Library
 - [Espressif esp_lvgl_port](https://github.com/espressif/esp-bsp)
+- [MicroLink](https://github.com/fudio101/microlink) — Tailscale/WireGuard client for ESP32
 
 ## License
 
